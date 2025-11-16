@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Usuarios - Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos_admin.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/breadcrumbs.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navigation-header.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-Yd3F2m9Uq+vR0NvKcJsteVEh9UpAJZciV06P88GJEqn3Ejj6+UeJ8V+RaH59RUW2KIiMzZljI0X58F3Rp3crJQ==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    
+    <style>
+        .usuarios-container {
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .usuarios-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        
+        .search-bar {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .search-bar input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+        
+        .filter-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .filter-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .filter-btn.active {
+            background: #dc3545;
+            color: white;
+            border-color: #dc3545;
+        }
+        
+        .usuarios-table {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .usuarios-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .usuarios-table th {
+            background: #f8f9fa;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 2px solid #ddd;
+        }
+        
+        .usuarios-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .usuarios-table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 0.5rem;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+        }
+        
+        .user-name {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .user-email {
+            font-size: 0.85rem;
+            color: #666;
+        }
+        
+        .role-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .role-comprador {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .role-vendedor {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+        
+        .role-administrador {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .status-activo {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        
+        .status-inactivo {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .btn-action {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        
+        .btn-edit {
+            background: #2196f3;
+            color: white;
+        }
+        
+        .btn-edit:hover {
+            background: #1976d2;
+        }
+        
+        .btn-delete {
+            background: #f44336;
+            color: white;
+        }
+        
+        .btn-delete:hover {
+            background: #d32f2f;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+        }
+        
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #666;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+        
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 1.5rem;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <!--Menu-->
+    <nav>
+        <div class="nav-left">
+            <div class="logo"><h2>AgroMarket</h2></div>
+            <div class="saludo-usuario">Hola, <strong>{{ nombre }}</strong></div>
+        </div>
+        <div class="menu">
+            <a href="/admin/panel">Home</a>
+            <a href="/admin/usuarios" class="activo">Usuarios</a>
+            <a href="/auth/perfil">Mi Perfil</a>
+            <a href="#" onclick="cerrarSesion()">Cerrar Sesión</a>
+        </div>
+    </nav>
+
+    <main>
+        <div class="navigation-header">
+            <div></div>
+            <div class="breadcrumbs">
+                <a href="/admin/panel">Panel Administrador</a>
+                <span>/</span>
+                <span>Gestión de Usuarios</span>
+            </div>
+        </div>
+
+        <div class="usuarios-container">
+            <div class="usuarios-header">
+                <h1><i class="fas fa-users-cog"></i> Gestión de Usuarios</h1>
+            </div>
+
+            <div class="search-bar">
+                <input type="text" id="searchInput" placeholder="Buscar por nombre, email..." onkeyup="filtrarUsuarios()">
+            </div>
+
+            <div class="filter-buttons">
+                <button class="filter-btn active" onclick="filtrarPorRol('todos')">Todos</button>
+                <button class="filter-btn" onclick="filtrarPorRol('comprador')">Compradores</button>
+                <button class="filter-btn" onclick="filtrarPorRol('vendedor')">Vendedores</button>
+                <button class="filter-btn" onclick="filtrarPorRol('administrador')">Administradores</button>
+            </div>
+
+            <div class="usuarios-table">
+                <div id="loadingUsuarios" class="loading">
+                    <i class="fas fa-spinner fa-spin"></i> Cargando usuarios...
+                </div>
+                <table id="usuariosTable" style="display: none;">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Email</th>
+                            <th>Roles</th>
+                            <th>Estado</th>
+                            <th>Fecha Registro</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usuariosTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal para editar usuario -->
+    <div id="editUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Editar Usuario</h2>
+                <button class="close-modal" onclick="cerrarModal()">&times;</button>
+            </div>
+            <form id="editUserForm">
+                <input type="hidden" id="editUserId">
+                <div class="form-group">
+                    <label>Nombre</label>
+                    <input type="text" id="editUserName" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="editUserEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>Roles</label>
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <label style="display: flex; align-items: center; font-weight: normal;">
+                            <input type="checkbox" id="editRoleComprador" value="comprador" style="width: auto; margin-right: 0.5rem;">
+                            Comprador
+                        </label>
+                        <label style="display: flex; align-items: center; font-weight: normal;">
+                            <input type="checkbox" id="editRoleVendedor" value="vendedor" style="width: auto; margin-right: 0.5rem;">
+                            Vendedor
+                        </label>
+                        <label style="display: flex; align-items: center; font-weight: normal;">
+                            <input type="checkbox" id="editRoleAdministrador" value="administrador" style="width: auto; margin-right: 0.5rem;">
+                            Administrador
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Estado</label>
+                    <select id="editUserStatus">
+                        <option value="true">Activo</option>
+                        <option value="false">Inactivo</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-action" onclick="cerrarModal()">Cancelar</button>
+                    <button type="submit" class="btn-action btn-edit">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
+    
+    <script src="{{ url_for('static', filename='js/admin-usuarios.js') }}"></script>
+</body>
+</html>
+

@@ -11,6 +11,7 @@ from modules.comprador.routes import comprador
 from modules.vendedor.routes import vendedor_bp
 from modules.general.routes import general_bp
 from modules.vendors import vendors_bp
+from modules.admin.routes import admin_bp
 
 # Inicializar Flask-Mail
 mail = Mail()
@@ -31,6 +32,7 @@ def create_app(config_name='development'):
     app.register_blueprint(vendedor_bp, url_prefix="/vendedor")
     app.register_blueprint(comprador, url_prefix="/comprador")
     app.register_blueprint(vendors_bp, url_prefix="/vendors")
+    app.register_blueprint(admin_bp, url_prefix="/admin")
     
     # Ruta adicional para registro sin prefijo
     @app.route("/register", methods=["GET", "POST"])

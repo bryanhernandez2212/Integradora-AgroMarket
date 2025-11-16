@@ -82,10 +82,13 @@
                         <option value="vendedor">
                             🌱 Vendedor - Ofrezco mis productos
                         </option>
+                        <option value="administrador">
+                            🛡️ Administrador - Gestionar usuarios y sistema
+                        </option>
                     </select>
                     <small>
                         <i class="fas fa-info-circle"></i> 
-                        Podrás agregar el otro rol más tarde desde tu perfil
+                        Podrás agregar otros roles más tarde desde tu perfil
                     </small>
                 </div>
 
@@ -113,6 +116,22 @@
                         <input type="hidden" id="ubicacion_lng" name="ubicacion_lng">
                         <input type="hidden" id="ubicacion_formatted" name="ubicacion_formatted">
                     </div>
+
+                    <!-- Documento de verificación -->
+                    <div class="input-group">
+                        <label for="documento_verificacion">
+                            <i class="fas fa-file-upload"></i> Documento de Verificación
+                        </label>
+                        <input type="file" name="documento_verificacion" id="documento_verificacion" accept="image/*,.pdf" required>
+                        <small>
+                            <i class="fas fa-info-circle"></i> 
+                            Sube una identificación oficial, RFC o comprobante de domicilio (JPG, PNG, PDF - máx. 5MB)
+                        </small>
+                        <div id="documento-preview" style="display: none; margin-top: 10px;">
+                            <img id="documento-preview-img" src="" alt="Vista previa" style="max-width: 200px; max-height: 200px; border-radius: 8px; border: 2px solid #2ba656;">
+                            <p id="documento-preview-nombre" style="margin-top: 5px; font-size: 0.9rem; color: #2ba656;"></p>
+                        </div>
+                    </div>
                 </div>
 
                 <button type="submit" class="btn-primary" id="submitBtn">
@@ -136,6 +155,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
     <script src="/static/js/firebase-config.js"></script>
 
     <script>
@@ -230,6 +250,7 @@
                     }
 
                     // Validaciones adicionales para vendedores
+                    const documentoVerificacion = document.getElementById('documento_verificacion')?.files[0];
                     if (rol === 'vendedor') {
                         if (!nombreTienda || nombreTienda.length < 3) {
                             alert('El nombre de la tienda es obligatorio y debe tener al menos 3 caracteres');
@@ -239,6 +260,16 @@
                         if (!ubicacion || ubicacion.length < 5) {
                             alert('La ubicación es obligatoria y debe tener al menos 5 caracteres');
                             document.getElementById('ubicacion')?.focus();
+                            return;
+                        }
+                        if (!documentoVerificacion) {
+                            alert('Debes subir un documento de verificación (identificación, RFC o comprobante de domicilio)');
+                            document.getElementById('documento_verificacion')?.focus();
+                            return;
+                        }
+                        // Validar tamaño del archivo (5MB máximo)
+                        if (documentoVerificacion.size > 5 * 1024 * 1024) {
+                            alert('El documento no debe exceder 5MB');
                             return;
                         }
                     }
@@ -255,6 +286,7 @@
 
                     const auth = firebase.auth();
                     const db = firebase.firestore();
+                    const storage = firebase.storage();
 
                     // Crear cuenta
                     const cred = await auth.createUserWithEmailAndPassword(email, password);
@@ -263,39 +295,118 @@
                     // Actualizar displayName
                     await user.updateProfile({ displayName: nombre });
 
-                    // Guardar documento del usuario
-                    const roles = [rol.toLowerCase()];
-                    const userData = {
-                        nombre,
-                        email,
-                        roles,
-                        rol_activo: rol.toLowerCase(),
-                        fecha_registro: firebase.firestore.FieldValue.serverTimestamp(),
-                        activo: true
-                    };
-
-                    // Agregar datos adicionales si es vendedor
+                    // Si es vendedor, NO crear el usuario en 'usuarios' todavía, solo guardar la solicitud
                     if (rol === 'vendedor') {
-                        userData.nombre_tienda = nombreTienda;
-                        userData.ubicacion = ubicacion;
+                        // Verificar si ya existe una solicitud previa por correo (evita duplicados al eliminar/crear cuentas)
+                        try {
+                            const existentesSnap = await db.collection('solicitudes_vendedores')
+                                .where('email', '==', email)
+                                .limit(3)
+                                .get();
+                            if (!existentesSnap.empty) {
+                                let existePendienteOAprobada = false;
+                                let docAntiguoId = null;
+                                existentesSnap.forEach(d => {
+                                    const est = (d.data().estado || 'pendiente').toLowerCase();
+                                    if (est === 'pendiente' || est === 'aprobada') {
+                                        existePendienteOAprobada = true;
+                                    }
+                                    docAntiguoId = d.id; // mantén el último para limpieza
+                                });
+                                if (existePendienteOAprobada) {
+                                    alert('Ya existe una solicitud asociada a este correo. Si fue rechazada, intenta con otro correo o contacta al administrador.');
+                                    try { await auth.signOut(); } catch(e) {}
+                                    window.location.href = '/auth/login';
+                                    return;
+                                } else if (docAntiguoId) {
+                                    // Si existe pero está rechazada u obsoleta, eliminar para reintentar limpio
+                                    try { await db.collection('solicitudes_vendedores').doc(docAntiguoId).delete(); } catch(e) { console.warn('No se pudo limpiar solicitud antigua:', e); }
+                                }
+                            }
+                        } catch (consultaError) {
+                            console.warn('No se pudo validar solicitudes existentes por email:', consultaError);
+                        }
+
+                        // Subir documento de verificación primero
+                        let documentoUrl = null;
+                        if (documentoVerificacion) {
+                            if (submitBtn) {
+                                submitBtn.textContent = 'Subiendo documento...';
+                            }
+                            try {
+                                const nombreArchivo = `verificaciones_vendedores/${user.uid}/documento_${Date.now()}_${documentoVerificacion.name.replace(/\s+/g, '_')}`;
+                                const storageRef = storage.ref(nombreArchivo);
+                                const metadata = {
+                                    contentType: documentoVerificacion.type,
+                                    customMetadata: {
+                                        userId: user.uid,
+                                        tipo: 'verificacion_vendedor',
+                                        uploadedAt: new Date().toISOString()
+                                    }
+                                };
+
+                                const snapshot = await storageRef.put(documentoVerificacion, metadata);
+                                documentoUrl = await snapshot.ref.getDownloadURL();
+                                console.log('✅ Documento de verificación subido:', documentoUrl);
+                            } catch (error) {
+                                console.error('❌ Error subiendo documento:', error);
+                                throw new Error('Error al subir el documento de verificación. Por favor, intenta de nuevo.');
+                            }
+                        }
+
                         // Agregar coordenadas si están disponibles
                         const ubicacionLat = document.getElementById('ubicacion_lat')?.value;
                         const ubicacionLng = document.getElementById('ubicacion_lng')?.value;
                         const ubicacionFormatted = document.getElementById('ubicacion_formatted')?.value;
-                        
-                        if (ubicacionLat && ubicacionLng) {
-                            userData.ubicacion_lat = parseFloat(ubicacionLat);
-                            userData.ubicacion_lng = parseFloat(ubicacionLng);
-                            userData.ubicacion_formatted = ubicacionFormatted || ubicacion;
-                        } else {
-                            userData.ubicacion_formatted = ubicacion;
-                        }
+
+                        // Crear solicitud en colección separada (NO crear usuario todavía)
+                        const solicitudData = {
+                            user_id: user.uid,
+                            nombre,
+                            email,
+                            nombre_tienda: nombreTienda,
+                            ubicacion: ubicacion,
+                            ubicacion_formatted: ubicacionFormatted || ubicacion,
+                            ubicacion_lat: ubicacionLat ? parseFloat(ubicacionLat) : null,
+                            ubicacion_lng: ubicacionLng ? parseFloat(ubicacionLng) : null,
+                            documento_url: documentoUrl,
+                            estado: 'pendiente', // pendiente, aprobada, rechazada
+                            fecha_solicitud: firebase.firestore.FieldValue.serverTimestamp(),
+                            revisado_por: null,
+                            fecha_revision: null,
+                            motivo_rechazo: null,
+                            password_hash: null // No guardamos la contraseña por seguridad
+                        };
+
+                        // Guardar solicitud en colección separada
+                        await db.collection('solicitudes_vendedores').doc(user.uid).set(solicitudData);
+                        console.log('✅ Solicitud de vendedor guardada en solicitudes_vendedores');
+
+                        // IMPORTANTE: Cerrar sesión y regresar al login (no permitir acceso aún)
+                        alert('✅ Tu solicitud de vendedor fue enviada. Un administrador la revisará. Recibirás una notificación cuando sea aprobada.');
+                        try { await auth.signOut(); } catch(e) { console.warn(e); }
+                        window.location.href = '/auth/login';
+                        return;
+                    } else {
+                        // Para otros roles (comprador, administrador), crear usuario normalmente
+                        const roles = [rol.toLowerCase()];
+                        const userData = {
+                            nombre,
+                            email,
+                            roles,
+                            rol_activo: rol.toLowerCase(),
+                            fecha_registro: firebase.firestore.FieldValue.serverTimestamp(),
+                            activo: true
+                        };
+
+                        await db.collection('usuarios').doc(user.uid).set(userData, { merge: true });
                     }
 
-                    await db.collection('usuarios').doc(user.uid).set(userData, { merge: true });
-
-                    // Redirigir según rol elegido
-                    const redirectUrl = rol === 'vendedor' ? '/vendedor/panel' : '/comprador/panel';
+                    // Redirigir según rol elegido (nota: el flujo de vendedor ya hizo signOut y retornó)
+                    let redirectUrl = '/comprador/panel';
+                    if (rol === 'administrador') {
+                        redirectUrl = '/admin/panel';
+                    }
                     window.location.href = redirectUrl;
 
                 } catch (err) {
@@ -357,6 +468,36 @@
             }
         });
 
+        // Preview del documento
+        const documentoInput = document.getElementById('documento_verificacion');
+        const documentoPreview = document.getElementById('documento-preview');
+        const documentoPreviewImg = document.getElementById('documento-preview-img');
+        const documentoPreviewNombre = document.getElementById('documento-preview-nombre');
+
+        if (documentoInput) {
+            documentoInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    if (file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            documentoPreviewImg.src = e.target.result;
+                            documentoPreviewImg.style.display = 'block';
+                            documentoPreviewNombre.textContent = file.name;
+                            documentoPreview.style.display = 'block';
+                        };
+                        reader.readAsDataURL(file);
+                    } else {
+                        documentoPreviewImg.style.display = 'none';
+                        documentoPreviewNombre.textContent = file.name + ' (PDF)';
+                        documentoPreview.style.display = 'block';
+                    }
+                } else {
+                    documentoPreview.style.display = 'none';
+                }
+            });
+        }
+
         if (rolSelect && vendedorFields) {
             rolSelect.addEventListener('change', function() {
                 if (this.value) {
@@ -369,6 +510,7 @@
                     // Hacer los campos requeridos
                     if (nombreTiendaInput) nombreTiendaInput.required = true;
                     if (ubicacionInput) ubicacionInput.required = true;
+                    if (documentoInput) documentoInput.required = true;
                     // Reinicializar autocomplete cuando se muestren los campos
                     setTimeout(initGooglePlaces, 100);
                 } else {
@@ -384,6 +526,11 @@
                         document.getElementById('ubicacion_lat').value = '';
                         document.getElementById('ubicacion_lng').value = '';
                         document.getElementById('ubicacion_formatted').value = '';
+                    }
+                    if (documentoInput) {
+                        documentoInput.required = false;
+                        documentoInput.value = '';
+                        documentoPreview.style.display = 'none';
                     }
                 }
             });

@@ -142,7 +142,8 @@ async function loginUltraFast(email, password) {
 
             // Sincronizar sesión Flask (mejor experiencia en rutas protegidas)
             try {
-                await fetch('/auth/sincronizar-rol', {
+                console.log('🔄 Sincronizando roles con Flask:', roles);
+                const syncResponse = await fetch('/auth/sincronizar-rol', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
@@ -154,11 +155,34 @@ async function loginUltraFast(email, password) {
                         email: result.user.email
                     })
                 });
-            } catch(_) {}
+                const syncData = await syncResponse.json();
+                console.log('✅ Roles sincronizados con Flask:', syncData);
+            } catch(error) {
+                console.warn('⚠️ Error sincronizando roles con Flask:', error);
+            }
         } catch(e) { console.warn('⚠️ No se pudo normalizar/sincronizar roles:', e); }
 
         const endTime = performance.now();
         console.log(`⚡ LOGIN ULTRA-RÁPIDO completado en ${(endTime - startTime).toFixed(2)}ms`);
+        
+        // Bloqueo de acceso para vendedores NO aprobados
+        try {
+            const solicitudDoc = await db.collection('solicitudes_vendedores').doc(result.user.uid).get();
+            if (solicitudDoc.exists) {
+                const solicitud = solicitudDoc.data();
+                const estado = (solicitud.estado || 'pendiente').toLowerCase();
+                if (estado !== 'aprobada') {
+                    // Mostrar mensaje y cerrar sesión, permanecer en login
+                    showMessageUltraFast('Tu solicitud de vendedor está ' + estado + '. Un administrador debe aprobarla.', 'info');
+                    await auth.signOut();
+                    // Asegurar regresar al login
+                    setTimeout(() => { window.location.replace('/auth/login'); }, 300);
+                    return { user: null, userData: null };
+                }
+            }
+        } catch (e) {
+            console.warn('⚠️ No se pudo verificar solicitudes de vendedor:', e);
+        }
         
         // Redirigir basado en el rol del usuario (con normalización aplicada)
         redirectUltraFast(userData);
@@ -195,7 +219,13 @@ function redirectUltraFast(userData = null) {
     // Si tiene 0 o 1 rol, redirigir directamente al panel correspondiente SIN asumir por defecto
     let redirectUrl = null;
     let rolActivo = null;
-    if (rolesFiltrados.length === 1) {
+    
+    // Prioridad: administrador tiene la máxima prioridad
+    if (rolesFiltrados.includes('administrador')) {
+        rolActivo = 'administrador';
+        redirectUrl = '/admin/panel';
+        console.log('🛡️ Usuario es administrador, redirigiendo a panel admin');
+    } else if (rolesFiltrados.length === 1) {
         rolActivo = rolesFiltrados[0];
     } else if (rolesFiltrados.length === 0) {
         // Si no hay lista de roles, intenta usar rol_activo de Firestore o cache
@@ -206,16 +236,22 @@ function redirectUltraFast(userData = null) {
         }
     }
     
-    if (rolActivo === 'vendedor') {
-        redirectUrl = '/vendedor/panel';
-    } else if (rolActivo === 'comprador') {
-        redirectUrl = '/comprador/panel';
-    } else {
-        // No hay rol determinado -> ir a perfil para que elija o configure
-        redirectUrl = '/auth/perfil';
+    // Si aún no hay redirectUrl, determinar según rolActivo
+    if (!redirectUrl) {
+        if (rolActivo === 'administrador') {
+            redirectUrl = '/admin/panel';
+        } else if (rolActivo === 'vendedor') {
+            redirectUrl = '/vendedor/panel';
+        } else if (rolActivo === 'comprador') {
+            redirectUrl = '/comprador/panel';
+        } else {
+            // No hay rol determinado -> ir a perfil para que elija o configure
+            redirectUrl = '/auth/perfil';
+        }
     }
     
-    console.log(`🎯 Redirigiendo directamente al panel: ${rolActivo}`);
+    console.log(`🎯 Redirigiendo directamente al panel: ${rolActivo || 'sin rol'}`);
+    console.log(`📋 Roles disponibles: ${rolesFiltrados.join(', ') || 'ninguno'}`);
     
     const endTime = performance.now();
     console.log(`⚡ Redirigiendo a ${redirectUrl} en ${(endTime - startTime).toFixed(2)}ms`);
@@ -374,33 +410,39 @@ async function registerUltraFast(nombre, email, password, rol = 'comprador') {
             // Continuar aunque falle la actualización del perfil
         }
         
-        // Crear documento del usuario en Firestore
-        console.log('🔄 Creando documento en Firestore...');
-        const userData = {
-            nombre: nombre,
-            email: email,
-            roles: [rol],
-            rol_activo: rol,
-            fecha_registro: new Date().toISOString(),
-            activo: true
-        };
-        
-        try {
-            await db.collection('usuarios').doc(result.user.uid).set(userData);
-            console.log('✅ Documento creado en Firestore');
-        } catch (firestoreError) {
-            console.warn('⚠️ Error creando documento en Firestore:', firestoreError.message);
-            // Continuar aunque falle Firestore, el usuario ya está creado en Auth
+        // Crear documento del usuario en Firestore - ajustado para vendedores
+        console.log('🔄 Creando documento en Firestore (flujo ajustado)...');
+        if (String(rol).toLowerCase().trim() === 'vendedor') {
+            // Para vendedores: NO crear aún documento completo de usuario con rol de vendedor.
+            // Solo marcar en una colección de solicitudes. El formulario completo y el documento
+            // se gestionan en templates/auth/register.html. Aquí solo dejamos al usuario en login.
+            showMessageUltraFast('Tu solicitud de vendedor ha sido enviada. Un administrador la revisará.', 'info');
+            try { await auth.signOut(); } catch(_) {}
+            setTimeout(() => { window.location.replace('/auth/login'); }, 300);
+            return { user: null, userData: null };
+        } else {
+            const userData = {
+                nombre: nombre,
+                email: email,
+                roles: [rol],
+                rol_activo: rol,
+                fecha_registro: new Date().toISOString(),
+                activo: true
+            };
+            try {
+                await db.collection('usuarios').doc(result.user.uid).set(userData);
+                console.log('✅ Documento creado en Firestore');
+            } catch (firestoreError) {
+                console.warn('⚠️ Error creando documento en Firestore:', firestoreError.message);
+            }
+            // Redirigir basado en el rol del usuario
+            console.log('🔄 Redirigiendo...');
+            redirectUltraFast(userData);
+            return { user: result.user, userData };
         }
-        
         const endTime = performance.now();
         console.log(`⚡ REGISTRO ULTRA-RÁPIDO completado en ${(endTime - startTime).toFixed(2)}ms`);
-        
-        // Redirigir basado en el rol del usuario
-        console.log('🔄 Redirigiendo...');
-        redirectUltraFast(userData);
-        
-        return { user: result.user, userData };
+        return { user: result.user, userData: null };
 
     } catch (error) {
         console.error('❌ Error en registro ultra-rápido:', error);
