@@ -98,18 +98,26 @@ def sincronizar_rol():
         if not user_id:
             return jsonify({'error': 'user_id es requerido'}), 400
         
+        # Normalizar roles a minúsculas para comparación
+        if isinstance(roles, list):
+            roles_normalizados = [r.lower().strip() if isinstance(r, str) else str(r).lower().strip() for r in roles]
+        else:
+            roles_normalizados = [str(roles).lower().strip()] if roles else []
+        
         # Establecer datos en la sesión de Flask
         session['user_id'] = user_id
         session['usuario_id'] = user_id  # Compatibilidad
-        session['roles'] = roles if isinstance(roles, list) else [roles]
-        session['rol_activo'] = rol_activo
+        session['roles'] = roles_normalizados
+        session['rol_activo'] = rol_activo.lower().strip() if rol_activo else (roles_normalizados[0] if roles_normalizados else 'comprador')
         session['nombre'] = nombre
         session['email'] = email
+        
+        current_app.logger.info(f'Roles sincronizados para {user_id}: {roles_normalizados}, rol_activo: {session["rol_activo"]}')
         
         return jsonify({
             'success': True,
             'message': 'Rol sincronizado correctamente',
-            'rol_activo': rol_activo,
+            'rol_activo': session['rol_activo'],
             'roles': session['roles']
         })
         

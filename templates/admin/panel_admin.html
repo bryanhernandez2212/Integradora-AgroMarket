@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Administrador - AgroMarket</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos_admin.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/breadcrumbs.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navigation-header.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-Yd3F2m9Uq+vR0NvKcJsteVEh9UpAJZciV06P88GJEqn3Ejj6+UeJ8V+RaH59RUW2KIiMzZljI0X58F3Rp3crJQ==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    
+    <!-- PWA: Manifest y theme color -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#dc3545">
+    
+    <style>
+        .admin-dashboard {
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .admin-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .admin-stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #dc3545;
+        }
+        
+        .admin-stat-card h3 {
+            margin: 0 0 0.5rem 0;
+            color: #333;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .admin-stat-card .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #dc3545;
+            margin: 0.5rem 0;
+        }
+        
+        .admin-stat-card .stat-icon {
+            font-size: 2.5rem;
+            color: #dc3545;
+            opacity: 0.3;
+            float: right;
+            margin-top: -1rem;
+        }
+        
+        .admin-actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+        
+        .admin-action-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        
+        .admin-action-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+        
+        .admin-action-card i {
+            font-size: 3rem;
+            color: #dc3545;
+            margin-bottom: 1rem;
+        }
+        
+        .admin-action-card h3 {
+            margin: 0 0 0.5rem 0;
+            color: #333;
+        }
+        
+        .admin-action-card p {
+            margin: 0;
+            color: #666;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <!--Menu-->
+    <nav>
+        <div class="nav-left">
+            <div class="logo"><h2>AgroMarket</h2></div>
+            <div class="saludo-usuario">Hola, <strong>{{ nombre }}</strong></div>
+        </div>
+        <div class="menu">
+            <a href="/admin/panel" {% if page == 'inicio' %}class="activo"{% endif %}>Home</a>
+            <a href="/admin/solicitudes-vendedores" {% if page == 'solicitudes' %}class="activo"{% endif %}>Solicitudes</a>
+            <a href="/admin/usuarios" {% if page == 'usuarios' %}class="activo"{% endif %}>Usuarios</a>
+            <a href="/auth/perfil">Mi Perfil</a>
+            <a href="#" onclick="cerrarSesion()">Cerrar Sesión</a>
+        </div>
+    </nav>
+
+    <main>
+        <!-- Navigation Header -->
+        <div class="navigation-header">
+            <div></div>
+            <div class="breadcrumbs">
+                <a href="/admin/panel">Panel Administrador</a>
+            </div>
+        </div>
+
+        <!-- Mensajes flash -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-messages">
+              {% for category, message in messages %}
+                <div class="alert {{ category }}">{{ message }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        <div class="admin-dashboard">
+            <h1 style="margin-bottom: 2rem;">
+                <i class="fas fa-shield-alt"></i> Panel de Administración
+            </h1>
+
+            <!-- Estadísticas -->
+            <div class="admin-stats-grid" id="adminStatsGrid">
+                <div class="admin-stat-card">
+                    <i class="fas fa-users stat-icon"></i>
+                    <h3>Total Usuarios</h3>
+                    <div class="stat-value" id="totalUsuarios">-</div>
+                </div>
+                <div class="admin-stat-card">
+                    <i class="fas fa-store stat-icon"></i>
+                    <h3>Vendedores</h3>
+                    <div class="stat-value" id="totalVendedores">-</div>
+                </div>
+                <div class="admin-stat-card">
+                    <i class="fas fa-shopping-cart stat-icon"></i>
+                    <h3>Compradores</h3>
+                    <div class="stat-value" id="totalCompradores">-</div>
+                </div>
+                <div class="admin-stat-card">
+                    <i class="fas fa-box stat-icon"></i>
+                    <h3>Productos</h3>
+                    <div class="stat-value" id="totalProductos">-</div>
+                </div>
+            </div>
+
+            <!-- Acciones rápidas -->
+            <h2 style="margin-top: 2rem; margin-bottom: 1rem;">Acciones Rápidas</h2>
+            <div class="admin-actions-grid">
+                <a href="/admin/solicitudes-vendedores" class="admin-action-card">
+                    <i class="fas fa-clipboard-list"></i>
+                    <h3>Revisar Solicitudes</h3>
+                    <p>Revisa y aprueba solicitudes de nuevos vendedores</p>
+                </a>
+                <a href="/admin/usuarios" class="admin-action-card">
+                    <i class="fas fa-users-cog"></i>
+                    <h3>Gestionar Usuarios</h3>
+                    <p>Ver, editar y administrar todos los usuarios del sistema</p>
+                </a>
+            </div>
+        </div>
+    </main>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
+    
+    <script>
+        let auth = null;
+        let db = null;
+        let currentUser = null;
+
+        async function initializeFirebase() {
+            try {
+                if (typeof firebase === 'undefined') {
+                    throw new Error('Firebase SDK no está cargado');
+                }
+
+                if (firebase.apps.length > 0) {
+                    auth = firebase.auth();
+                    db = firebase.firestore();
+                } else {
+                    const app = firebase.initializeApp(window.firebaseConfig);
+                    auth = firebase.auth();
+                    db = firebase.firestore();
+                }
+
+                db.settings({
+                    cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
+                    ignoreUndefinedProperties: true
+                });
+
+                // Esperar a que el usuario esté disponible
+                currentUser = auth.currentUser;
+                if (!currentUser) {
+                    console.log('⏳ Esperando autenticación...');
+                    // Esperar un momento a que Firebase Auth se inicialice
+                    let usuarioEncontrado = false;
+                    await new Promise((resolve) => {
+                        const unsubscribe = auth.onAuthStateChanged((user) => {
+                            if (user) {
+                                currentUser = user;
+                                usuarioEncontrado = true;
+                                unsubscribe();
+                                resolve();
+                            }
+                        });
+                        // Timeout de seguridad - solo redirigir si realmente no hay usuario
+                        setTimeout(() => {
+                            if (!usuarioEncontrado && !currentUser) {
+                                console.error('❌ Timeout esperando autenticación después de 5 segundos');
+                                // No redirigir automáticamente, solo mostrar error
+                                const errorDiv = document.createElement('div');
+                                errorDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #f44336; color: white; padding: 1rem; border-radius: 8px; z-index: 10000;';
+                                errorDiv.innerHTML = '<strong>Error:</strong> No se pudo verificar la autenticación. Por favor, recarga la página.';
+                                document.body.appendChild(errorDiv);
+                                setTimeout(() => errorDiv.remove(), 5000);
+                            }
+                            resolve();
+                        }, 5000);
+                    });
+                }
+
+                if (!currentUser) {
+                    console.error('❌ No hay usuario autenticado después de esperar');
+                    // No redirigir automáticamente, mostrar mensaje
+                    const errorDiv = document.createElement('div');
+                    errorDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #f44336; color: white; padding: 1rem; border-radius: 8px; z-index: 10000;';
+                    errorDiv.innerHTML = '<strong>Error:</strong> No estás autenticado. <a href="/auth/login" style="color: white; text-decoration: underline;">Ir al login</a>';
+                    document.body.appendChild(errorDiv);
+                    return;
+                }
+
+                console.log('✅ Usuario autenticado:', currentUser.uid);
+
+                // Verificar que el usuario sea administrador
+                console.log('🔍 Buscando usuario en Firestore:', currentUser.uid);
+                const userDoc = await db.collection('usuarios').doc(currentUser.uid).get();
+                if (!userDoc.exists) {
+                    console.error('❌ Usuario no encontrado en Firestore');
+                    // No redirigir automáticamente, mostrar mensaje
+                    const errorDiv = document.createElement('div');
+                    errorDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #ff9800; color: white; padding: 1rem; border-radius: 8px; z-index: 10000;';
+                    errorDiv.innerHTML = '<strong>Advertencia:</strong> Usuario no encontrado en la base de datos. <a href="/auth/perfil" style="color: white; text-decoration: underline;">Ir al perfil</a>';
+                    document.body.appendChild(errorDiv);
+                    return;
+                }
+
+                const userData = userDoc.data();
+                console.log('📋 Datos del usuario (RAW):', userData);
+                console.log('📋 Roles (RAW):', userData.roles);
+                console.log('📋 Rol activo (RAW):', userData.rol_activo);
+                
+                const roles = userData.roles || [];
+                console.log('🎭 Roles extraídos:', roles);
+                console.log('🎭 Tipo de roles:', typeof roles);
+                console.log('🎭 Es array?:', Array.isArray(roles));
+                console.log('🎭 Longitud del array:', Array.isArray(roles) ? roles.length : 'N/A');
+                
+                // Normalizar roles para comparación
+                let rolesNormalizados = [];
+                if (Array.isArray(roles)) {
+                    rolesNormalizados = roles.map(r => {
+                        const normalized = String(r).toLowerCase().trim();
+                        console.log(`  - Rol original: "${r}" -> normalizado: "${normalized}"`);
+                        return normalized;
+                    });
+                } else if (typeof roles === 'string') {
+                    rolesNormalizados = [roles.toLowerCase().trim()];
+                } else if (roles) {
+                    // Si es un objeto u otro tipo, intentar convertirlo
+                    rolesNormalizados = [String(roles).toLowerCase().trim()];
+                }
+                
+                console.log('🎭 Roles normalizados finales:', rolesNormalizados);
+                console.log('🎭 Buscando "administrador" en:', rolesNormalizados);
+                
+                const tieneAdmin = rolesNormalizados.includes('administrador');
+                console.log('🛡️ RESULTADO: Tiene rol de administrador?', tieneAdmin);
+                
+                // Verificación adicional: también verificar rol_activo
+                const rolActivo = userData.rol_activo ? String(userData.rol_activo).toLowerCase().trim() : null;
+                console.log('🛡️ Rol activo normalizado:', rolActivo);
+                const tieneAdminPorRolActivo = rolActivo === 'administrador';
+                console.log('🛡️ Tiene admin por rol_activo?', tieneAdminPorRolActivo);
+                
+                const tieneAdminFinal = tieneAdmin || tieneAdminPorRolActivo;
+                console.log('🛡️ RESULTADO FINAL: Tiene admin (roles o rol_activo)?', tieneAdminFinal);
+                
+                if (!tieneAdminFinal) {
+                    console.error('❌ VALIDACIÓN FALLÓ');
+                    console.error('❌ Roles normalizados:', rolesNormalizados);
+                    console.error('❌ Rol activo:', rolActivo);
+                    console.error('❌ Datos completos del usuario:', JSON.stringify(userData, null, 2));
+                    
+                    // Mostrar error detallado en la página
+                    const errorDiv = document.createElement('div');
+                    errorDiv.style.cssText = 'position: fixed; top: 20px; left: 20px; right: 20px; background: #ff9800; color: white; padding: 1.5rem; border-radius: 8px; z-index: 10000; max-width: 600px; margin: 0 auto;';
+                    errorDiv.innerHTML = `
+                        <strong>⚠️ Validación de rol falló</strong><br>
+                        <small>Roles encontrados: ${JSON.stringify(rolesNormalizados)}<br>
+                        Rol activo: ${rolActivo || 'N/A'}</small><br>
+                        <button onclick="window.location.href='/auth/perfil'" style="margin-top: 10px; padding: 8px 16px; background: white; color: #ff9800; border: none; border-radius: 4px; cursor: pointer;">
+                            Ir al perfil
+                        </button>
+                    `;
+                    document.body.appendChild(errorDiv);
+                } else {
+                    console.log('✅✅✅ Usuario administrador verificado correctamente ✅✅✅');
+                }
+
+                await loadAdminStats();
+            } catch (error) {
+                console.error('❌ Error inicializando Firebase:', error);
+                console.error('Stack:', error.stack);
+                // No redirigir automáticamente en caso de error, solo mostrar en consola
+            }
+        }
+
+        async function loadAdminStats() {
+            try {
+                // Contar usuarios
+                const usuariosSnapshot = await db.collection('usuarios').get();
+                const totalUsuarios = usuariosSnapshot.size;
+                
+                let totalVendedores = 0;
+                let totalCompradores = 0;
+                
+                usuariosSnapshot.forEach(doc => {
+                    const data = doc.data();
+                    const roles = data.roles || [];
+                    if (Array.isArray(roles)) {
+                        if (roles.includes('vendedor')) totalVendedores++;
+                        if (roles.includes('comprador')) totalCompradores++;
+                    }
+                });
+
+                // Contar productos
+                const productosSnapshot = await db.collection('productos').get();
+                const totalProductos = productosSnapshot.size;
+
+                // Actualizar UI
+                document.getElementById('totalUsuarios').textContent = totalUsuarios;
+                document.getElementById('totalVendedores').textContent = totalVendedores;
+                document.getElementById('totalCompradores').textContent = totalCompradores;
+                document.getElementById('totalProductos').textContent = totalProductos;
+            } catch (error) {
+                console.error('Error cargando estadísticas:', error);
+            }
+        }
+
+        function cerrarSesion() {
+            if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
+                auth.signOut().then(() => {
+                    window.location.href = '/auth/login';
+                }).catch(error => {
+                    console.error('Error al cerrar sesión:', error);
+                });
+            }
+        }
+
+        // Inicializar cuando se carga la página
+        document.addEventListener('DOMContentLoaded', initializeFirebase);
+    </script>
+</body>
+</html>
+
