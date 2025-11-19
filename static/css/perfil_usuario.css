@@ -201,8 +201,14 @@ body {
     border-bottom: 2px solid var(--border-light);
 }
 
-.user-avatar {
+.user-avatar-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
     margin-bottom: 1.5rem;
+}
+
+.user-avatar {
     position: relative;
     width: 80px;
     height: 80px;
@@ -213,6 +219,54 @@ body {
     justify-content: center;
     background: var(--bg-light);
     border: 3px solid var(--primary-color);
+    flex-shrink: 0;
+}
+
+.avatar-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.btn-avatar-action {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+    color: white;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    text-decoration: none;
+}
+
+.btn-avatar-action:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.btn-avatar-action:active {
+    transform: scale(0.95);
+}
+
+.btn-avatar-action.btn-edit {
+    background: var(--primary-color);
+}
+
+.btn-avatar-action.btn-edit:hover {
+    background: var(--primary-dark);
+}
+
+.btn-avatar-action.btn-delete {
+    background: #dc3545;
+}
+
+.btn-avatar-action.btn-delete:hover {
+    background: #c82333;
 }
 
 .user-avatar img {
@@ -304,6 +358,12 @@ body {
     background: var(--bg-light);
     border: 4px solid var(--primary-color);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.profile-photo-preview:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
 .profile-photo-preview img {
@@ -2293,5 +2353,156 @@ input:checked + .slider:before {
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+/* ===================== */
+/* Modal de Foto de Perfil */
+/* ===================== */
+.photo-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+    overflow-y: auto;
+    padding: 2rem 1rem;
+}
+
+.photo-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    z-index: 10000;
+    pointer-events: auto; /* Permitir interacción */
+}
+
+.photo-modal-content {
+    position: relative;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 500px;
+    width: 90%;
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 10001;
+    animation: slideUp 0.3s ease;
+    margin: auto;
+}
+
+.photo-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.photo-modal-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: var(--text-dark);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.photo-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+}
+
+.photo-modal-close:hover {
+    background: var(--bg-light);
+    color: var(--text-dark);
+}
+
+.photo-modal-body {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.photo-modal-preview {
+    position: relative;
+    width: 250px;
+    height: 250px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-light);
+    border: 6px solid var(--primary-color);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.photo-modal-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+}
+
+.photo-modal-preview i {
+    font-size: 8rem;
+    color: var(--primary-color);
+    position: relative;
+    z-index: 1;
+}
+
+.photo-modal-preview img[style*="display: none"] {
+    display: none !important;
+}
+
+.photo-modal-preview i[style*="display: none"] {
+    display: none !important;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
     }
 }
