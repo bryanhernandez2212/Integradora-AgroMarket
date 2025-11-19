@@ -209,19 +209,60 @@ async function subirImagen(archivo, productoId, indice) {
         throw new Error('Firebase Storage no está disponible');
     }
 
-    const nombreArchivo = `productos/${productoId}/imagen_${indice}_${Date.now()}_${archivo.name.replace(/\s+/g, '_')}`;
-    const storageRef = storage.ref(nombreArchivo);
-    const metadata = {
-        contentType: archivo.type,
-        customMetadata: {
-            productoId,
-            vendedorId: currentUser.uid,
-            indice: String(indice)
-        }
-    };
+    // Verificar que Storage esté correctamente inicializado
+    if (!storage.ref) {
+        throw new Error('Firebase Storage no está correctamente inicializado. Por favor, recarga la página.');
+    }
 
-    const snapshot = await storageRef.put(archivo, metadata);
-    return snapshot.ref.getDownloadURL();
+    // Verificar que el usuario esté autenticado
+    if (!currentUser.uid) {
+        throw new Error('Usuario no autenticado. Por favor, inicia sesión.');
+    }
+
+    try {
+        const nombreArchivo = `productos/${productoId}/imagen_${indice}_${Date.now()}_${archivo.name.replace(/\s+/g, '_')}`;
+        console.log('📤 Subiendo imagen a:', nombreArchivo);
+        console.log('👤 Usuario autenticado:', currentUser.uid);
+        
+        const storageRef = storage.ref(nombreArchivo);
+        const metadata = {
+            contentType: archivo.type,
+            customMetadata: {
+                productoId,
+                vendedorId: currentUser.uid,
+                indice: String(indice)
+            }
+        };
+
+        console.log('⏳ Iniciando subida...');
+        const snapshot = await storageRef.put(archivo, metadata);
+        console.log('✅ Imagen subida exitosamente');
+        
+        console.log('⏳ Obteniendo URL de descarga...');
+        const downloadURL = await snapshot.ref.getDownloadURL();
+        console.log('✅ URL obtenida:', downloadURL);
+        
+        return downloadURL;
+    } catch (error) {
+        console.error('❌ Error subiendo imagen:', error);
+        console.error('❌ Código de error:', error.code);
+        console.error('❌ Mensaje:', error.message);
+        
+        // Manejo específico de errores comunes
+        if (error.code === 'storage/unauthorized') {
+            throw new Error('No tienes permisos para subir archivos. Verifica las reglas de Storage en Firebase Console.');
+        } else if (error.code === 'storage/quota-exceeded') {
+            throw new Error('Se ha excedido la cuota de almacenamiento de Firebase.');
+        } else if (error.code === 'storage/unauthenticated') {
+            throw new Error('Debes iniciar sesión para subir archivos.');
+        } else if (error.code === 412 || (error.message && error.message.includes('412'))) {
+            throw new Error('Error 412: Problema de permisos en Firebase Storage. Verifica las reglas de Storage y los permisos IAM en Google Cloud Console.');
+        } else if (error.code === 'storage/unknown') {
+            throw new Error('Error desconocido al subir archivo. Verifica tu conexión a internet y las reglas de Storage.');
+        }
+        
+        throw new Error(`Error al subir imagen: ${error.message || 'Error desconocido'}`);
+    }
 }
 
 async function subirImagenes(productoId) {

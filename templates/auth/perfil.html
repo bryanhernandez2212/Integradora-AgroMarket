@@ -16,6 +16,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
     
     <!-- Firebase Config -->
     <script src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
@@ -53,9 +54,20 @@
             <!-- ===== Panel lateral izquierdo ===== -->
             <aside class="sidebar">
                 <div class="user-card">
-                    <div class="user-avatar" id="sidebar-avatar">
-                        <img id="sidebar-avatar-img" src="" alt="Foto de perfil" style="display: none; visibility: hidden;">
-                        <i class="fas fa-user-circle" id="sidebar-avatar-icon" style="display: block; visibility: visible;"></i>
+                    <div class="user-avatar-container">
+                        <div class="user-avatar" id="sidebar-avatar">
+                            <img id="sidebar-avatar-img" src="" alt="Foto de perfil" style="display: none; visibility: hidden;">
+                            <i class="fas fa-user-circle" id="sidebar-avatar-icon" style="display: block; visibility: visible;"></i>
+                        </div>
+                        <div class="avatar-actions">
+                            <label for="profilePhotoInput" class="btn-avatar-action btn-edit" title="Editar foto">
+                                <i class="fas fa-edit"></i>
+                            </label>
+                            <button type="button" class="btn-avatar-action btn-delete" id="btn-remove-photo" style="display: none;" title="Eliminar foto">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            <input type="file" id="profilePhotoInput" accept="image/*" style="display: none;">
+                        </div>
                     </div>
                     <div class="user-info">
                         <h3 id="sidebar-nombre">Usuario</h3>
@@ -108,29 +120,6 @@
                                 <input type="email" name="email" id="form-email" value="usuario@ejemplo.com" placeholder="tu@email.com" required>
                             </div>
 
-                            <div class="form-group">
-                                <label>
-                                    <i class="fas fa-camera"></i> Foto de Perfil
-                                </label>
-                                <div class="profile-photo-container">
-                                    <div class="profile-photo-preview" id="profilePhotoPreview">
-                                        <img id="profilePhotoImg" src="" alt="Foto de perfil" style="display: none; visibility: hidden;">
-                                        <i class="fas fa-user-circle" id="profilePhotoIcon" style="display: block; visibility: visible;"></i>
-                                    </div>
-                                    <div class="profile-photo-actions">
-                                        <label for="profilePhotoInput" class="btn btn-secondary btn-small">
-                                            <i class="fas fa-upload"></i> Cambiar Foto
-                                        </label>
-                                        <button type="button" class="btn btn-secondary btn-small" id="btn-remove-photo" style="display: none;">
-                                            <i class="fas fa-trash"></i> Eliminar
-                                        </button>
-                                        <input type="file" id="profilePhotoInput" accept="image/*" style="display: none;">
-                                    </div>
-                                    <small style="display: block; margin-top: 8px; color: #6b7280; font-size: 0.85rem;">
-                                        <i class="fas fa-info-circle"></i> Formatos: JPG, PNG, GIF (máx. 5MB)
-                                    </small>
-                                </div>
-                            </div>
 
                             <div class="form-group">
                                 <label for="password">
@@ -313,10 +302,35 @@
         async function initializeFirebase() {
             try {
                 console.log('🔍 Verificando Firebase SDK...');
+                
+                // Esperar a que Firebase esté disponible (máximo 5 segundos)
+                let intentos = 0;
+                const maxIntentos = 20;
+                while (typeof firebase === 'undefined' && intentos < maxIntentos) {
+                    await new Promise(resolve => setTimeout(resolve, 250));
+                    intentos++;
+                }
+                
                 if (typeof firebase === 'undefined') {
-                    throw new Error('Firebase SDK no está cargado');
+                    throw new Error('Firebase SDK no está cargado. Verifica que los scripts de Firebase estén incluidos.');
                 }
                 console.log('✅ Firebase SDK encontrado');
+
+                // Verificar que los módulos necesarios estén disponibles
+                if (typeof firebase.auth === 'undefined') {
+                    throw new Error('Firebase Auth no está cargado. Verifica que firebase-auth-compat.js esté incluido.');
+                }
+                if (typeof firebase.firestore === 'undefined') {
+                    throw new Error('Firebase Firestore no está cargado. Verifica que firebase-firestore-compat.js esté incluido.');
+                }
+                if (typeof firebase.storage === 'undefined') {
+                    throw new Error('Firebase Storage no está cargado. Verifica que firebase-storage-compat.js esté incluido.');
+                }
+
+                // Verificar configuración
+                if (!window.firebaseConfig) {
+                    throw new Error('Configuración de Firebase no disponible. Verifica que firebase-config.js esté cargado.');
+                }
 
                 if (firebase.apps.length > 0) {
                     console.log('📱 Firebase ya está inicializado, usando instancia existente');
@@ -329,6 +343,19 @@
                     auth = firebase.auth();
                     db = firebase.firestore();
                     storage = firebase.storage();
+                }
+
+                // Validar que Storage esté correctamente inicializado
+                if (!storage || !storage.ref) {
+                    console.error('❌ Firebase Storage no está correctamente inicializado');
+                    throw new Error('Firebase Storage no está disponible. Verifica que firebase-storage-compat.js esté cargado.');
+                }
+
+                // Verificar que el bucket esté configurado
+                if (window.firebaseConfig && window.firebaseConfig.storageBucket) {
+                    console.log('✅ Storage bucket configurado:', window.firebaseConfig.storageBucket);
+                } else {
+                    console.warn('⚠️ Storage bucket no está configurado en firebaseConfig');
                 }
 
                 // Configurar Firestore
@@ -491,15 +518,11 @@
             console.log('🖼️ ===== updateProfilePhoto LLAMADA =====');
             console.log('🖼️ URL recibida:', fotoUrl);
             
-            const profilePhotoImg = document.getElementById('profilePhotoImg');
-            const profilePhotoIcon = document.getElementById('profilePhotoIcon');
             const sidebarAvatarImg = document.getElementById('sidebar-avatar-img');
             const sidebarAvatarIcon = document.getElementById('sidebar-avatar-icon');
             const btnRemovePhoto = document.getElementById('btn-remove-photo');
 
             console.log('🖼️ Elementos encontrados:', {
-                profilePhotoImg: !!profilePhotoImg,
-                profilePhotoIcon: !!profilePhotoIcon,
                 sidebarAvatarImg: !!sidebarAvatarImg,
                 sidebarAvatarIcon: !!sidebarAvatarIcon,
                 btnRemovePhoto: !!btnRemovePhoto
@@ -516,17 +539,6 @@
             console.log('🖼️ URL válida?', urlValida);
 
             if (urlValida) {
-                // Mostrar foto en el formulario
-                if (profilePhotoImg) {
-                    profilePhotoImg.src = fotoUrl;
-                    profilePhotoImg.style.display = 'block';
-                    profilePhotoImg.style.visibility = 'visible';
-                }
-                if (profilePhotoIcon) {
-                    profilePhotoIcon.style.display = 'none';
-                    profilePhotoIcon.style.visibility = 'hidden';
-                }
-                
                 // Mostrar foto en el sidebar
                 if (sidebarAvatarImg) {
                     console.log('🖼️ Configurando imagen del sidebar con URL:', fotoUrl);
@@ -571,20 +583,12 @@
                 }
                 
                 // Mostrar botón de eliminar
-                if (btnRemovePhoto) btnRemovePhoto.style.display = 'inline-block';
+                if (btnRemovePhoto) {
+                    btnRemovePhoto.style.display = 'flex';
+                }
             } else {
                 console.log('⚠️ No hay foto de perfil, mostrando icono por defecto');
                 // Ocultar fotos y mostrar iconos
-                if (profilePhotoImg) {
-                    profilePhotoImg.style.display = 'none';
-                    profilePhotoImg.style.visibility = 'hidden';
-                    profilePhotoImg.src = '';
-                }
-                if (profilePhotoIcon) {
-                    profilePhotoIcon.style.display = 'block';
-                    profilePhotoIcon.style.visibility = 'visible';
-                }
-                
                 if (sidebarAvatarImg) {
                     sidebarAvatarImg.style.display = 'none';
                     sidebarAvatarImg.style.visibility = 'hidden';
@@ -596,7 +600,9 @@
                 }
                 
                 // Ocultar botón de eliminar
-                if (btnRemovePhoto) btnRemovePhoto.style.display = 'none';
+                if (btnRemovePhoto) {
+                    btnRemovePhoto.style.display = 'none';
+                }
             }
         }
 
@@ -605,38 +611,59 @@
             const profilePhotoInput = document.getElementById('profilePhotoInput');
             const btnRemovePhoto = document.getElementById('btn-remove-photo');
 
+            // Cuando se selecciona una nueva foto, subirla automáticamente
             if (profilePhotoInput) {
-                profilePhotoInput.addEventListener('change', (e) => {
+                profilePhotoInput.addEventListener('change', async (e) => {
                     const file = e.target.files[0];
                     if (file) {
                         // Validar tamaño (máx 5MB)
                         if (file.size > 5 * 1024 * 1024) {
                             showMessage('La imagen es muy grande. Máximo 5MB', 'error');
+                            profilePhotoInput.value = '';
                             return;
                         }
 
                         // Validar tipo
                         if (!file.type.startsWith('image/')) {
                             showMessage('Por favor selecciona una imagen válida', 'error');
+                            profilePhotoInput.value = '';
                             return;
                         }
 
-                        // Guardar archivo seleccionado
-                        selectedProfilePhoto = file;
-
-                        // Mostrar preview
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            const profilePhotoImg = document.getElementById('profilePhotoImg');
-                            const profilePhotoIcon = document.getElementById('profilePhotoIcon');
-                            if (profilePhotoImg) {
-                                profilePhotoImg.src = event.target.result;
-                                profilePhotoImg.style.display = 'block';
-                                if (profilePhotoIcon) profilePhotoIcon.style.display = 'none';
+                        try {
+                            showMessage('Subiendo foto de perfil...', 'info');
+                            
+                            // Subir foto directamente
+                            const fotoUrl = await subirFotoPerfil(file);
+                            
+                            // Actualizar en Firestore
+                            await db.collection('usuarios').doc(currentUser.uid).update({
+                                foto_perfil: fotoUrl,
+                                fecha_actualizacion: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                            
+                            // Actualizar en Firebase Auth
+                            await currentUser.updateProfile({
+                                photoURL: fotoUrl
+                            });
+                            
+                            // Actualizar userData local
+                            if (userData) {
+                                userData.foto_perfil = fotoUrl;
                             }
-                            if (btnRemovePhoto) btnRemovePhoto.style.display = 'inline-block';
-                        };
-                        reader.readAsDataURL(file);
+                            
+                            // Actualizar UI
+                            updateProfilePhoto(fotoUrl);
+                            
+                            // Limpiar input
+                            profilePhotoInput.value = '';
+                            
+                            showMessage('Foto de perfil actualizada correctamente', 'success');
+                        } catch (error) {
+                            console.error('❌ Error subiendo foto de perfil:', error);
+                            showMessage('Error al subir la foto de perfil', 'error');
+                            profilePhotoInput.value = '';
+                        }
                     }
                 });
             }
@@ -676,6 +703,7 @@
 
                             // Actualizar UI
                             updateProfilePhoto(null);
+                            
                             showMessage('Foto de perfil eliminada', 'success');
                         } catch (error) {
                             console.error('❌ Error eliminando foto de perfil:', error);
@@ -692,7 +720,17 @@
                 throw new Error('Firebase Storage no está disponible');
             }
 
+            // Validar que Storage esté correctamente inicializado
+            if (!storage.ref) {
+                throw new Error('Firebase Storage no está correctamente inicializado. Por favor, recarga la página.');
+            }
+
             try {
+                // Verificar que el usuario esté autenticado
+                if (!currentUser.uid) {
+                    throw new Error('Usuario no autenticado');
+                }
+
                 // Eliminar foto anterior si existe
                 if (userData && userData.foto_perfil) {
                     try {
@@ -700,6 +738,7 @@
                         await oldPhotoRef.delete();
                     } catch (error) {
                         console.warn('⚠️ No se pudo eliminar la foto anterior:', error);
+                        // No lanzar error, continuar con la subida
                     }
                 }
 
@@ -714,6 +753,7 @@
                     }
                 };
 
+                console.log('📤 Subiendo foto de perfil a:', nombreArchivo);
                 const snapshot = await storageRef.put(archivo, metadata);
                 const downloadURL = await snapshot.ref.getDownloadURL();
                 
@@ -721,7 +761,26 @@
                 return downloadURL;
             } catch (error) {
                 console.error('❌ Error subiendo foto de perfil:', error);
-                throw error;
+                
+                // Manejo específico del error 412
+                if (error.code === 'storage/unauthorized' || error.code === 412 || 
+                    (error.message && error.message.includes('412'))) {
+                    const errorMsg = 'Error de permisos en Firebase Storage. ' +
+                        'Por favor, verifica las reglas de Storage en Firebase Console o contacta al administrador.';
+                    throw new Error(errorMsg);
+                }
+                
+                // Manejo de otros errores comunes
+                if (error.code === 'storage/unauthorized') {
+                    throw new Error('No tienes permisos para subir archivos. Verifica que estés autenticado.');
+                } else if (error.code === 'storage/quota-exceeded') {
+                    throw new Error('Se ha excedido la cuota de almacenamiento.');
+                } else if (error.code === 'storage/unauthenticated') {
+                    throw new Error('Debes iniciar sesión para subir archivos.');
+                }
+                
+                // Error genérico
+                throw new Error(error.message || 'Error al subir la foto de perfil. Por favor, intenta de nuevo.');
             }
         }
 

@@ -179,10 +179,19 @@
                             let imagenValida = null;
                             if (data.imagen && typeof data.imagen === 'string' && data.imagen.trim() !== '') {
                             try {
-                                new URL(data.imagen);
-                                imagenValida = data.imagen;
+                                const url = new URL(data.imagen);
+                                // Validar que sea una URL de Firebase Storage o HTTPS válida
+                                if (url.protocol === 'https:' && 
+                                    (url.hostname.includes('firebasestorage') || 
+                                     url.hostname.includes('googleapis') ||
+                                     url.hostname.includes('firebase'))) {
+                                    imagenValida = data.imagen;
+                                } else {
+                                    console.warn('⚠️ URL de imagen no válida (no es Firebase Storage):', data.imagen);
+                                }
                             } catch (e) {
-                                // Imagen inválida
+                                // Imagen inválida - podría ser una ruta relativa o URL mal formada
+                                console.warn('⚠️ URL de imagen inválida:', data.imagen, e);
                             }
                             }
 
@@ -233,14 +242,22 @@
 
                     // Crear HTML solo con productos, sin espacios publicitarios
                     const productosHTML = productosLimitados.map(producto => {
+                            const imagenId = `producto-img-${producto.id}`;
+                            const placeholderId = `producto-placeholder-${producto.id}`;
+                            
                             return `
                             <article class="producto-card-popular" data-id="${producto.id}">
                                 <a href="/comprador/detalle_producto/${producto.id}" class="producto-link">
                                     <div class="producto-image-popular">
                                         ${producto.imagen ? 
-                                            `<img src="${producto.imagen}" alt="${producto.nombre}" 
-                                                  onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                             <div class="producto-placeholder-popular" style="display: none;">
+                                            `<img id="${imagenId}" 
+                                                  data-src="${producto.imagen}" 
+                                                  alt="${producto.nombre}" 
+                                                  loading="lazy"
+                                                  style="display: none;"
+                                                  onload="this.style.display='block'; document.getElementById('${placeholderId}').style.display='none';"
+                                                  onerror="console.warn('Error cargando imagen:', this.src); this.style.display='none'; const placeholder = document.getElementById('${placeholderId}'); if(placeholder) placeholder.style.display='flex';">
+                                             <div id="${placeholderId}" class="producto-placeholder-popular">
                                                  <i class="fas fa-box"></i>
                                              </div>` :
                                             `<div class="producto-placeholder-popular">
@@ -259,6 +276,35 @@
                         }).join('');
 
                     productosGrid.innerHTML = productosHTML;
+                    
+                    // Cargar imágenes de forma asíncrona después de insertar el HTML
+                    setTimeout(() => {
+                        productosLimitados.forEach(producto => {
+                            if (producto.imagen) {
+                                const img = document.getElementById(`producto-img-${producto.id}`);
+                                const placeholder = document.getElementById(`producto-placeholder-${producto.id}`);
+                                
+                                if (img && img.dataset.src) {
+                                    // Intentar cargar la imagen directamente
+                                    // Si falla, el onerror handler mostrará el placeholder
+                                    img.src = img.dataset.src;
+                                    
+                                    // Timeout de seguridad: si después de 3 segundos no se cargó, mostrar placeholder
+                                    setTimeout(() => {
+                                        if (img && (!img.complete || !img.naturalWidth)) {
+                                            console.warn('⚠️ Timeout cargando imagen del producto:', producto.id);
+                                            if (placeholder) {
+                                                placeholder.style.display = 'flex';
+                                            }
+                                            if (img) {
+                                                img.style.display = 'none';
+                                            }
+                                        }
+                                    }, 3000);
+                                }
+                            }
+                        });
+                    }, 100);
                 }
             }
 

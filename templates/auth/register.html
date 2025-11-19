@@ -285,6 +285,18 @@
                     const db = firebase.firestore();
                     const storage = firebase.storage();
 
+                    // Validar que Storage esté correctamente inicializado
+                    if (!storage || !storage.ref) {
+                        throw new Error('Firebase Storage no está correctamente inicializado. Por favor, recarga la página.');
+                    }
+
+                    // Verificar que el bucket esté configurado
+                    if (!window.firebaseConfig.storageBucket) {
+                        console.warn('⚠️ Storage bucket no está configurado en firebaseConfig');
+                    } else {
+                        console.log('✅ Storage bucket configurado:', window.firebaseConfig.storageBucket);
+                    }
+
                     // Crear cuenta
                     const cred = await auth.createUserWithEmailAndPassword(email, password);
                     const user = cred.user;
@@ -331,6 +343,16 @@
                                 submitBtn.textContent = 'Subiendo documento...';
                             }
                             try {
+                                // Validar que Storage esté correctamente inicializado
+                                if (!storage || !storage.ref) {
+                                    throw new Error('Firebase Storage no está correctamente inicializado. Por favor, recarga la página.');
+                                }
+
+                                // Verificar que el usuario esté autenticado
+                                if (!user || !user.uid) {
+                                    throw new Error('Usuario no autenticado');
+                                }
+
                                 const nombreArchivo = `verificaciones_vendedores/${user.uid}/documento_${Date.now()}_${documentoVerificacion.name.replace(/\s+/g, '_')}`;
                                 const storageRef = storage.ref(nombreArchivo);
                                 const metadata = {
@@ -342,12 +364,34 @@
                                     }
                                 };
 
+                                console.log('📤 Subiendo documento de verificación a:', nombreArchivo);
                                 const snapshot = await storageRef.put(documentoVerificacion, metadata);
                                 documentoUrl = await snapshot.ref.getDownloadURL();
                                 console.log('✅ Documento de verificación subido:', documentoUrl);
                             } catch (error) {
                                 console.error('❌ Error subiendo documento:', error);
-                                throw new Error('Error al subir el documento de verificación. Por favor, intenta de nuevo.');
+                                
+                                // Manejo específico del error 412
+                                if (error.code === 'storage/unauthorized' || error.code === 412 || 
+                                    (error.message && error.message.includes('412'))) {
+                                    const errorMsg = 'Error de permisos en Firebase Storage (Error 412). ' +
+                                        'Por favor, verifica las reglas de Storage en Firebase Console. ' +
+                                        'Ve a Firebase Console → Storage → Reglas y asegúrate de que las reglas permitan la subida de archivos.';
+                                    alert(errorMsg);
+                                    throw new Error(errorMsg);
+                                }
+                                
+                                // Manejo de otros errores comunes
+                                if (error.code === 'storage/unauthorized') {
+                                    throw new Error('No tienes permisos para subir archivos. Verifica que estés autenticado.');
+                                } else if (error.code === 'storage/quota-exceeded') {
+                                    throw new Error('Se ha excedido la cuota de almacenamiento.');
+                                } else if (error.code === 'storage/unauthenticated') {
+                                    throw new Error('Debes iniciar sesión para subir archivos.');
+                                }
+                                
+                                // Error genérico
+                                throw new Error(error.message || 'Error al subir el documento de verificación. Por favor, intenta de nuevo.');
                             }
                         }
 
