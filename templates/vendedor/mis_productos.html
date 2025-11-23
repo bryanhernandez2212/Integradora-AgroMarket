@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/static/css/navigation-header.css">
     <link rel="stylesheet" href="/static/css/mis_productos.css?v=6">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="{{ url_for('static', filename='js/mobile-menu.js') }}" defer></script>
     
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -21,21 +22,67 @@
     <script src="/static/js/firebase-instant.js"></script>
 </head>
 <body data-page="mis-productos">
-<nav>
-    <div class="nav-left">
-        <div class="logo"><h2>AgroMarket</h2></div>
-        <div class="saludo-usuario">Hola, <strong>{{ nombre }}</strong></div>
-    </div>
-    <div class="menu">
-        <a href="/vendedor/panel" {% if page == 'inicio' %}class="activo"{% endif %}>Home</a>
-        <a href="/vendedor/agregar_producto" {% if page == 'agregar' %}class="activo"{% endif %}>Agregar Productos</a>
-        <a href="/vendedor/mis_productos" {% if page == 'productos' %}class="activo"{% endif %}>Mis Productos</a>
-        <a href="/vendedor/ventas" {% if page == 'ventas' %}class="activo"{% endif %}>Ventas</a>
-        <a href="/vendedor/chats" {% if page == 'chats' %}class="activo"{% endif %}>Chats</a>
-        <a href="/auth/perfil" {% if page == 'perfil' %}class="activo"{% endif %}>Mi Perfil</a>
-        <a href="#" onclick="cerrarSesion()">Cerrar Sesión</a>
-    </div>
-</nav>
+    <!-- ===== Overlay para móviles ===== -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+    
+    <nav>
+        <button class="menu-toggle" id="menu-toggle" aria-label="Abrir menú">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <div class="nav-left">
+            <div class="logo"><h2>AgroMarket</h2></div>
+            <div class="saludo-usuario">Hola, <strong>{{ nombre }}</strong></div>
+        </div>
+        <div class="menu">
+            <a href="/vendedor/panel" {% if page == 'inicio' %}class="activo"{% endif %}>Home</a>
+            <a href="/vendedor/agregar_producto" {% if page == 'agregar' %}class="activo"{% endif %}>Agregar Productos</a>
+            <a href="/vendedor/mis_productos" {% if page == 'productos' %}class="activo"{% endif %}>Mis Productos</a>
+            <a href="/vendedor/ventas" {% if page == 'ventas' %}class="activo"{% endif %}>Ventas</a>
+            <a href="/vendedor/chats" {% if page == 'chats' %}class="activo"{% endif %}>Chats</a>
+            <a href="/auth/perfil" {% if page == 'perfil' %}class="activo"{% endif %}>Mi Perfil</a>
+            <a href="#" onclick="cerrarSesion()">Cerrar Sesión</a>
+        </div>
+    </nav>
+    
+    <!-- ===== Sidebar para móviles ===== -->
+    <aside class="sidebar-menu" id="sidebar-menu">
+        <!-- Header con foto de perfil y nombre -->
+        <div class="sidebar-header-profile">
+            <div class="sidebar-profile-avatar" id="sidebar-profile-avatar">
+                <img id="sidebar-profile-avatar-img" src="" alt="Foto de perfil" style="display: none;">
+                <i class="fas fa-user-circle" id="sidebar-profile-avatar-icon"></i>
+            </div>
+            <div class="sidebar-profile-info">
+                <p class="sidebar-profile-name" id="sidebar-profile-name">{{ nombre }}</p>
+                <p class="sidebar-profile-email" id="sidebar-profile-email">{{ session.get('email', '') }}</p>
+            </div>
+        </div>
+        <div class="menu">
+            <a href="/vendedor/panel" {% if page == 'inicio' %}class="activo"{% endif %}>
+                <span>Home</span>
+            </a>
+            <a href="/vendedor/agregar_producto" {% if page == 'agregar' %}class="activo"{% endif %}>
+                <span>Agregar Productos</span>
+            </a>
+            <a href="/vendedor/mis_productos" {% if page == 'productos' %}class="activo"{% endif %}>
+                <span>Mis Productos</span>
+            </a>
+            <a href="/vendedor/ventas" {% if page == 'ventas' %}class="activo"{% endif %}>
+                <span>Ventas</span>
+            </a>
+            <a href="/vendedor/chats" {% if page == 'chats' %}class="activo"{% endif %}>
+                <span>Chats</span>
+            </a>
+            <a href="/auth/perfil" {% if page == 'perfil' %}class="activo"{% endif %}>
+                <span>Mi Perfil</span>
+            </a>
+            <a href="#" onclick="cerrarSesion()">
+                <span>Cerrar Sesión</span>
+            </a>
+        </div>
+    </aside>
 
 <main>
     <!-- Navigation Header -->

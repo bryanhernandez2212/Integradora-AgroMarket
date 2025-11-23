@@ -1,5 +1,6 @@
 .ventas-main {
     padding: 2rem;
+    padding-left: 0;
     max-width: 1400px;
     margin: 0 auto;
 }
@@ -9,6 +10,11 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 2rem;
+    padding-left: 0;
+}
+
+.ventas-header > div:first-child {
+    padding-left: 0;
 }
 
 .btn-pedidos-entregados {
@@ -808,10 +814,47 @@
 @media (max-width: 768px) {
     .ventas-main {
         padding: 1rem;
+        padding-left: 0;
     }
 
     .ventas-stats {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
+    }
+    
+    .stat-card {
+        padding: 0.75rem 0.5rem;
+        min-width: 0;
+    }
+    
+    .stat-card h3 {
+        font-size: 0.7rem;
+        margin-bottom: 0.25rem;
+        line-height: 1.2;
+    }
+    
+    .stat-value {
+        font-size: 1.1rem;
+        word-break: break-word;
+    }
+    
+    /* Para pantallas muy pequeñas, mantener en fila pero con texto más pequeño */
+    @media (max-width: 480px) {
+        .ventas-stats {
+            gap: 0.4rem;
+        }
+        
+        .stat-card {
+            padding: 0.6rem 0.4rem;
+        }
+        
+        .stat-card h3 {
+            font-size: 0.65rem;
+        }
+        
+        .stat-value {
+            font-size: 1rem;
+        }
     }
 
     .ventas-table-container {

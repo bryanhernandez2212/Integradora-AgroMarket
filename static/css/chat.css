@@ -305,51 +305,97 @@
 }
 
 .chat-conversation-header {
-    padding: 1.25rem 1.75rem;
+    padding: 0.75rem 1.25rem;
     border-bottom: 1px solid #e7f0e5;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1.5rem;
+    gap: 1rem;
     max-width: 1200px;
     margin: 0 auto;
+    min-height: 60px;
 }
 
 .chat-partner {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.chat-back-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(46, 139, 87, 0.1);
+    color: #1b5e20;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    border: none;
+    cursor: pointer;
+}
+
+.chat-back-btn:hover {
+    background: rgba(46, 139, 87, 0.2);
+    transform: translateX(-2px);
+}
+
+.chat-back-btn i {
+    font-size: 0.9rem;
+}
+
+.chat-partner .chat-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 1rem;
+    flex-shrink: 0;
 }
 
 .chat-partner h2 {
-    margin: 0 0 0.3rem 0;
-    font-size: 1.25rem;
+    margin: 0;
+    font-size: 1rem;
     color: #223a25;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .chat-partner p {
     margin: 0;
     color: #5b6b5d;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .chat-actions {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.5rem;
+    flex-shrink: 0;
 }
 
 .chat-action-link {
     background: rgba(46, 139, 87, 0.1);
-    border-radius: 10px;
-    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
     color: #1b5e20;
     border: none;
     font-weight: 600;
+    font-size: 0.85rem;
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
     cursor: pointer;
     text-decoration: none;
+    white-space: nowrap;
 }
 
 .chat-actions .chat-action-link[disabled] {
@@ -550,33 +596,110 @@
     align-self: center;
 }
 
-.chat-back {
-    padding: 0.9rem 1.25rem;
-    border-bottom: 1px solid #d4e3d2;
-}
-
-.chat-back a {
-    text-decoration: none;
-    color: #1b5e20;
-    font-weight: 600;
-}
+/* .chat-back removido - el botón de volver ahora está en el header */
 
 @media (max-width: 992px) {
     .chat-layout {
         grid-template-columns: 1fr;
     }
 
+    /* En móvil, mostrar la lista de chats por defecto */
     .chat-list-panel {
+        display: flex !important;
         flex-direction: column;
-        order: 2;
     }
-
-    .chat-conversation {
+    
+    /* Ocultar la conversación por defecto en móvil solo en la página de lista de chats */
+    /* La conversación individual (chat_conversacion.html) siempre debe mostrarse */
+    #chatConversation {
+        display: none !important;
         order: 1;
     }
-
+    
+    /* Mostrar la conversación solo cuando tiene la clase activa (en lista de chats) */
+    #chatConversation.chat-conversation-active {
+        display: flex !important;
+    }
+    
+    /* En la página de conversación individual, siempre mostrar */
+    .chat-conversation:not(#chatConversation) {
+        display: flex !important;
+        order: 1;
+    }
+    
+    /* Ocultar el header de conversación en pantalla pequeña - la información ya está en el chat */
     .chat-conversation-header {
-        flex-direction: column;
-        align-items: flex-start;
+        display: none !important;
+    }
+    
+    /* Botón volver flotante para móvil */
+    .chat-back-btn-mobile {
+        position: fixed;
+        top: 90px;
+        left: 1rem;
+        z-index: 1000;
+        display: none; /* Oculto por defecto, se muestra con JS cuando hay conversación activa */
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: #28a745;
+        color: white;
+        text-decoration: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        transition: all 0.2s ease;
+    }
+    
+    .chat-back-btn-mobile:hover {
+        background: #218838;
+        transform: translateX(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    
+    .chat-back-btn-mobile:active {
+        transform: translateX(-4px) scale(0.95);
+    }
+    
+    .chat-back-btn-mobile i {
+        font-size: 1.1rem;
+    }
+    
+    /* Mostrar botón móvil cuando hay conversación activa */
+    #chatConversation.chat-conversation-active .chat-back-btn-mobile,
+    .chat-conversation.chat-conversation-active .chat-back-btn-mobile {
+        display: flex !important;
+    }
+    
+    /* Ocultar la lista cuando hay una conversación visible (clase agregada por JS) */
+    .chat-conversation-active ~ .chat-list-panel,
+    .chat-layout.has-active-conversation .chat-list-panel {
+        display: none !important;
+    }
+    
+    /* Ocultar placeholder en pantallas pequeñas */
+    .chat-placeholder {
+        display: none !important;
+    }
+
+    /* Ocultar botón volver del header en móvil */
+    .chat-back-btn {
+        display: none !important;
+    }
+}
+
+/* Mostrar header y ocultar botón volver en pantalla grande */
+@media (min-width: 993px) {
+    .chat-conversation-header {
+        display: flex !important;
+    }
+    
+    .chat-back-btn {
+        display: none !important;
+    }
+    
+    /* Ocultar botón móvil en pantalla grande */
+    .chat-back-btn-mobile {
+        display: none !important;
     }
 }
