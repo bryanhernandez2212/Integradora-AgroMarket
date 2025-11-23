@@ -13,12 +13,58 @@ let db = null;
 let storage = null;
 
 let allProducts = [];
+let filteredProducts = [];
 let currentPage = 1;
 const PAGE_SIZE = 15;
 
+// Filtros activos
+let activeFilters = {
+    search: '',
+    category: null,
+    status: null
+};
+
 function getVisibleProducts() {
     const start = (currentPage - 1) * PAGE_SIZE;
-    return allProducts.slice(start, start + PAGE_SIZE);
+    return filteredProducts.slice(start, start + PAGE_SIZE);
+}
+
+function applyFilters() {
+    filteredProducts = allProducts.filter(producto => {
+        // Filtro de búsqueda (nombre o descripción)
+        if (activeFilters.search) {
+            const searchTerm = activeFilters.search.toLowerCase();
+            const nombre = (producto.nombre || '').toLowerCase();
+            const descripcion = (producto.descripcion || '').toLowerCase();
+            if (!nombre.includes(searchTerm) && !descripcion.includes(searchTerm)) {
+                return false;
+            }
+        }
+        
+        // Filtro de categoría
+        if (activeFilters.category) {
+            const categoria = capitalizar(producto.categoria || 'Sin categoría');
+            if (categoria !== activeFilters.category) {
+                return false;
+            }
+        }
+        
+        // Filtro de estado
+        if (activeFilters.status !== null) {
+            const activo = producto.activo !== false;
+            if (activeFilters.status === 'activo' && !activo) {
+                return false;
+            }
+            if (activeFilters.status === 'pausado' && activo) {
+                return false;
+            }
+        }
+        
+        return true;
+    });
+    
+    currentPage = 1; // Resetear a la primera página
+    renderProducts(getVisibleProducts());
 }
 
 function updatePagination(total) {
@@ -149,6 +195,8 @@ function renderProducts(productos) {
     const body = document.getElementById('productsBody');
     const loader = document.getElementById('productsLoader');
     const empty = document.getElementById('productsEmpty');
+    const cardsContainer = document.getElementById('productsCardsContainer');
+    const isMobile = window.innerWidth <= 768;
 
     if (!table || !body) {
         console.error('Tabla de productos no encontrada');
@@ -157,18 +205,38 @@ function renderProducts(productos) {
 
     if (loader) loader.style.display = 'none';
 
+    // Limpiar y ocultar contenedores de productos
+    if (table) table.style.display = 'none';
+    if (cardsContainer) {
+        cardsContainer.style.display = 'none';
+        cardsContainer.innerHTML = ''; // Limpiar contenido de cards
+    }
+    if (empty) empty.style.display = 'none';
+    body.innerHTML = '';
+
     if (!productos.length) {
-        table.style.display = 'none';
-        body.innerHTML = '';
+        // Determinar el mensaje según si hay filtros activos
+        const hasActiveFilters = activeFilters.search || activeFilters.category || activeFilters.status !== null;
+        const message = hasActiveFilters 
+            ? 'No se encontraron productos que coincidan con los filtros aplicados.'
+            : 'Comienza agregando tu primer producto.';
+        const showAddButton = !hasActiveFilters;
+        
         if (empty) {
             empty.innerHTML = `
                 <div class="empty-state">
-                    <i class="fas fa-box-open"></i>
-                    <h4>No hay productos</h4>
-                    <p>Comienza agregando tu primer producto.</p>
-                    <button class="action-pill" onclick="window.location.href='/vendedor/agregar_producto'">
-                        Agregar producto
-                    </button>
+                    <i class="fas fa-${hasActiveFilters ? 'search' : 'box-open'}"></i>
+                    <h4>${hasActiveFilters ? 'Sin resultados' : 'No hay productos'}</h4>
+                    <p>${message}</p>
+                    ${showAddButton ? `
+                        <button class="action-pill" onclick="window.location.href='/vendedor/agregar_producto'">
+                            Agregar producto
+                        </button>
+                    ` : `
+                        <button class="action-pill" onclick="window.clearFilters()">
+                            Limpiar filtros
+                        </button>
+                    `}
                 </div>
             `;
             empty.style.display = 'block';
@@ -179,58 +247,147 @@ function renderProducts(productos) {
     }
 
     if (empty) empty.style.display = 'none';
-    table.style.display = 'block';
+    
+    if (isMobile) {
+        // Asegurarse de que el contenedor de cards existe y está limpio
+        let cardsContainer = document.getElementById('productsCardsContainer');
+        if (!cardsContainer) {
+            cardsContainer = document.createElement('div');
+            cardsContainer.id = 'productsCardsContainer';
+            cardsContainer.className = 'products-cards-container';
+            table.parentNode.insertBefore(cardsContainer, table);
+        } else {
+            cardsContainer.innerHTML = ''; // Limpiar contenido anterior
+        }
+        
+        // Renderizar cards en móvil
+        const cards = productos.map((producto, index) => {
+            const nombre = producto.nombre || 'Sin nombre';
+            const descripcion = producto.descripcion || 'Sin descripción';
+            const categoria = capitalizar(producto.categoria || 'Sin categoría');
+            const unidad = capitalizar(producto.unidad || 'Sin unidad');
+            const precio = Number(producto.precio) || 0;
+            const stock = Number(producto.stock) || 0;
+            const imagenUrl = producto.imagenUrl || null;
+            const activo = producto.activo !== false;
+            const statusLabel = activo ? 'Activo' : 'Pausado';
+            const pauseLabel = activo ? 'Pausar' : 'Reanudar';
+            const cardId = `product-card-${producto.id}-${index}`;
 
-    const rows = productos.map((producto) => {
-        const nombre = producto.nombre || 'Sin nombre';
-        const descripcion = producto.descripcion || 'Sin descripción';
-        const categoria = capitalizar(producto.categoria || 'Sin categoría');
-        const unidad = capitalizar(producto.unidad || 'Sin unidad');
-        const precio = Number(producto.precio) || 0;
-        const stock = Number(producto.stock) || 0;
-        const imagenUrl = producto.imagenUrl || null;
-        const activo = producto.activo !== false;
-        const statusLabel = activo ? 'Activo' : 'Pausado';
-        const pauseLabel = activo ? 'Pausar' : 'Reanudar';
-
-        return `
-            <tr>
-                <td>
-                    <div class="product-info">
+            return `
+                <div class="product-card" id="${cardId}">
+                    <div class="product-card-header">
                         ${imagenUrl ? `
-                            <img src="${imagenUrl}" alt="${nombre}" class="product-image">
+                            <img src="${imagenUrl}" alt="${nombre}" class="product-card-image">
                         ` : `
-                            <div class="product-image placeholder">
+                            <div class="product-card-image placeholder">
                                 <i class="fas fa-image"></i>
                             </div>
                         `}
-                        <div class="product-details">
+                        <div class="product-card-title">
                             <h4>${nombre}</h4>
-                            <p>${descripcion.length > 60 ? descripcion.substring(0, 60) + '…' : descripcion}</p>
+                            <p>${descripcion}</p>
                         </div>
                     </div>
-                </td>
-                <td><span class="category-badge">${categoria}</span></td>
-                <td class="product-price">$ ${precio.toFixed(2)}</td>
-                <td>${stock}</td>
-                <td>${unidad}</td>
-                <td><span class="status-pill ${activo ? 'active' : 'paused'}">${statusLabel}</span></td>
-                <td>
-                    <div class="action-buttons">
+                    <button class="product-card-expand-btn" onclick="window.toggleProductCard('${cardId}')">
+                        <span>Ver más información</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="product-card-body">
+                        <div class="product-card-field">
+                            <span class="product-card-label">Categoría</span>
+                            <span class="product-card-value">${categoria}</span>
+                        </div>
+                        <div class="product-card-field">
+                            <span class="product-card-label">Precio</span>
+                            <span class="product-card-value price">$ ${precio.toFixed(2)}</span>
+                        </div>
+                        <div class="product-card-field">
+                            <span class="product-card-label">Stock</span>
+                            <span class="product-card-value">${stock} ${unidad}</span>
+                        </div>
+                        <div class="product-card-field">
+                            <span class="product-card-label">Estado</span>
+                            <span class="product-card-value"><span class="status-pill ${activo ? 'active' : 'paused'}">${statusLabel}</span></span>
+                        </div>
+                    </div>
+                    <div class="product-card-footer">
                         <button class="action-pill action-edit" onclick="window.editProduct('${producto.id}')">Editar</button>
                         <button class="action-pill action-pause" onclick="window.pauseProduct('${producto.id}')">${pauseLabel}</button>
-                        <button class="action-pill action-delete" onclick="window.deleteProduct('${producto.id}', '${nombre.replace(/'/g, "\'")}')">Eliminar</button>
+                        <button class="action-pill action-delete" onclick="window.deleteProduct('${producto.id}', '${nombre.replace(/'/g, "\\'")}')">Eliminar</button>
                     </div>
-                </td>
-            </tr>
-        `;
-    }).join('');
+                </div>
+            `;
+        }).join('');
 
-    body.innerHTML = rows;
-    updatePagination(allProducts.length);
+        // Insertar cards en el contenedor
+        cardsContainer.innerHTML = cards;
+        table.style.display = 'none';
+        cardsContainer.style.display = 'block';
+    } else {
+        // Renderizar tabla en desktop
+        const cardsContainer = document.getElementById('productsCardsContainer');
+        if (cardsContainer) cardsContainer.style.display = 'none';
+        table.style.display = 'block';
 
+        const rows = productos.map((producto) => {
+            const nombre = producto.nombre || 'Sin nombre';
+            const descripcion = producto.descripcion || 'Sin descripción';
+            const categoria = capitalizar(producto.categoria || 'Sin categoría');
+            const unidad = capitalizar(producto.unidad || 'Sin unidad');
+            const precio = Number(producto.precio) || 0;
+            const stock = Number(producto.stock) || 0;
+            const imagenUrl = producto.imagenUrl || null;
+            const activo = producto.activo !== false;
+            const statusLabel = activo ? 'Activo' : 'Pausado';
+            const pauseLabel = activo ? 'Pausar' : 'Reanudar';
+
+            return `
+                <tr>
+                    <td>
+                        <div class="product-info">
+                            ${imagenUrl ? `
+                                <img src="${imagenUrl}" alt="${nombre}" class="product-image">
+                            ` : `
+                                <div class="product-image placeholder">
+                                    <i class="fas fa-image"></i>
+                                </div>
+                            `}
+                            <div class="product-details">
+                                <h4>${nombre}</h4>
+                                <p>${descripcion.length > 60 ? descripcion.substring(0, 60) + '…' : descripcion}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="category-badge">${categoria}</span></td>
+                    <td class="product-price">$ ${precio.toFixed(2)}</td>
+                    <td>${stock}</td>
+                    <td>${unidad}</td>
+                    <td><span class="status-pill ${activo ? 'active' : 'paused'}">${statusLabel}</span></td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="action-pill action-edit" onclick="window.editProduct('${producto.id}')">Editar</button>
+                            <button class="action-pill action-pause" onclick="window.pauseProduct('${producto.id}')">${pauseLabel}</button>
+                            <button class="action-pill action-delete" onclick="window.deleteProduct('${producto.id}', '${nombre.replace(/'/g, "\\'")}')">Eliminar</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        body.innerHTML = rows;
+    }
+
+    updatePagination(filteredProducts.length);
     hideStatus();
 }
+
+// Redimensionar cuando cambia el tamaño de la ventana
+window.addEventListener('resize', () => {
+    if (allProducts.length > 0) {
+        renderProducts(getVisibleProducts());
+    }
+});
 
 async function loadProducts(vendedorId) {
     try {
@@ -255,6 +412,7 @@ async function loadProducts(vendedorId) {
             const todos = await db.collection('productos').limit(100).get();
             if (todos.empty) {
                 allProducts = [];
+                filteredProducts = [];
                 renderProducts([]);
                 setStatus('📭 No se encontraron productos', 'info');
                 return;
@@ -272,14 +430,16 @@ async function loadProducts(vendedorId) {
 
         if (!productos.length) {
             allProducts = [];
+            filteredProducts = [];
             setStatus('📭 No se encontraron productos del vendedor', 'info');
             renderProducts([]);
             return;
         }
 
         allProducts = await prepararProductos(productos);
-        currentPage = 1;
-        renderProducts(getVisibleProducts());
+        // Inicializar filteredProducts con todos los productos
+        filteredProducts = [...allProducts];
+        applyFilters(); // Aplicar filtros después de cargar
         setStatus(`✅ Productos cargados: ${allProducts.length}`, 'success');
     } catch (error) {
         console.error('Error al cargar productos:', error);
@@ -291,7 +451,7 @@ async function loadProducts(vendedorId) {
 }
 
 window.changePage = function changePage(delta) {
-    const totalPages = Math.ceil(allProducts.length / PAGE_SIZE);
+    const totalPages = Math.ceil(filteredProducts.length / PAGE_SIZE);
     const newPage = currentPage + delta;
     if (newPage < 1 || newPage > totalPages) {
         return;
@@ -356,7 +516,186 @@ window.deleteProduct = async function deleteProduct(productId, productName) {
     }
 };
 
+window.toggleProductCard = function toggleProductCard(cardId) {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+    
+    const isExpanded = card.classList.contains('expanded');
+    const btn = card.querySelector('.product-card-expand-btn span');
+    
+    if (isExpanded) {
+        card.classList.remove('expanded');
+        if (btn) btn.textContent = 'Ver más información';
+    } else {
+        card.classList.add('expanded');
+        if (btn) btn.textContent = 'Ver menos';
+    }
+};
+
+// Funciones de filtros
+function setupFilters() {
+    const searchInput = document.getElementById('searchInput');
+    const categoryFilter = document.getElementById('categoryFilter');
+    const statusFilter = document.getElementById('statusFilter');
+    
+    // Búsqueda
+    if (searchInput) {
+        let searchTimeout;
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                activeFilters.search = e.target.value.trim();
+                applyFilters();
+            }, 300); // Debounce de 300ms
+        });
+    }
+    
+    // Filtro de categoría
+    if (categoryFilter) {
+        categoryFilter.addEventListener('click', () => {
+            showCategoryFilter();
+        });
+    }
+    
+    // Filtro de estado
+    if (statusFilter) {
+        statusFilter.addEventListener('click', () => {
+            showStatusFilter();
+        });
+    }
+}
+
+function showCategoryFilter() {
+    // Obtener todas las categorías únicas
+    const categorias = [...new Set(allProducts.map(p => capitalizar(p.categoria || 'Sin categoría')))].sort();
+    
+    // Crear modal/dropdown
+    const modal = document.createElement('div');
+    modal.className = 'filter-modal';
+    modal.innerHTML = `
+        <div class="filter-modal-content">
+            <div class="filter-modal-header">
+                <h3>Filtrar por categoría</h3>
+                <button class="filter-modal-close" onclick="this.closest('.filter-modal').remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="filter-modal-body">
+                <button class="filter-option ${activeFilters.category === null ? 'active' : ''}" 
+                        onclick="window.selectCategory(null)">
+                    Todas las categorías
+                </button>
+                ${categorias.map(cat => `
+                    <button class="filter-option ${activeFilters.category === cat ? 'active' : ''}" 
+                            onclick="window.selectCategory('${cat}')">
+                        ${cat}
+                    </button>
+                `).join('')}
+            </div>
+        </div>
+        <div class="filter-modal-overlay" onclick="this.closest('.filter-modal').remove()"></div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function showStatusFilter() {
+    const modal = document.createElement('div');
+    modal.className = 'filter-modal';
+    modal.innerHTML = `
+        <div class="filter-modal-content">
+            <div class="filter-modal-header">
+                <h3>Filtrar por estado</h3>
+                <button class="filter-modal-close" onclick="this.closest('.filter-modal').remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="filter-modal-body">
+                <button class="filter-option ${activeFilters.status === null ? 'active' : ''}" 
+                        onclick="window.selectStatus(null)">
+                    Todos los estados
+                </button>
+                <button class="filter-option ${activeFilters.status === 'activo' ? 'active' : ''}" 
+                        onclick="window.selectStatus('activo')">
+                    Activos
+                </button>
+                <button class="filter-option ${activeFilters.status === 'pausado' ? 'active' : ''}" 
+                        onclick="window.selectStatus('pausado')">
+                    Pausados
+                </button>
+            </div>
+        </div>
+        <div class="filter-modal-overlay" onclick="this.closest('.filter-modal').remove()"></div>
+    `;
+    document.body.appendChild(modal);
+}
+
+window.selectCategory = function selectCategory(category) {
+    activeFilters.category = category;
+    applyFilters();
+    updateFilterButtons();
+    document.querySelectorAll('.filter-modal').forEach(m => m.remove());
+}
+
+window.selectStatus = function selectStatus(status) {
+    activeFilters.status = status;
+    applyFilters();
+    updateFilterButtons();
+    document.querySelectorAll('.filter-modal').forEach(m => m.remove());
+}
+
+window.clearFilters = function clearFilters() {
+    activeFilters.search = '';
+    activeFilters.category = null;
+    activeFilters.status = null;
+    
+    // Limpiar input de búsqueda
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) searchInput.value = '';
+    
+    // Actualizar botones
+    updateFilterButtons();
+    
+    // Aplicar filtros (que ahora no tienen restricciones)
+    applyFilters();
+}
+
+function updateFilterButtons() {
+    const categoryFilter = document.getElementById('categoryFilter');
+    const statusFilter = document.getElementById('statusFilter');
+    
+    if (categoryFilter) {
+        if (activeFilters.category) {
+            categoryFilter.innerHTML = `<i class="fas fa-filter"></i> ${activeFilters.category}`;
+            categoryFilter.style.background = '#e6f5e1';
+            categoryFilter.style.borderColor = '#2f7a32';
+            categoryFilter.style.color = '#2f7a32';
+        } else {
+            categoryFilter.innerHTML = `<i class="fas fa-filter"></i> Categoría`;
+            categoryFilter.style.background = '';
+            categoryFilter.style.borderColor = '';
+            categoryFilter.style.color = '';
+        }
+    }
+    
+    if (statusFilter) {
+        if (activeFilters.status) {
+            const statusText = activeFilters.status === 'activo' ? 'Activos' : 'Pausados';
+            statusFilter.innerHTML = `<i class="fas fa-toggle-on"></i> ${statusText}`;
+            statusFilter.style.background = '#e6f5e1';
+            statusFilter.style.borderColor = '#2f7a32';
+            statusFilter.style.color = '#2f7a32';
+        } else {
+            statusFilter.innerHTML = `<i class="fas fa-toggle-on"></i> Estado`;
+            statusFilter.style.background = '';
+            statusFilter.style.borderColor = '';
+            statusFilter.style.color = '';
+        }
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    setupFilters(); // Configurar filtros al cargar
+    
     ensureFirebase().then(({ auth: authInstance, db: dbInstance, storage: storageInstance }) => {
         auth = authInstance;
         db = dbInstance;
@@ -383,4 +722,5 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 })();
+
 

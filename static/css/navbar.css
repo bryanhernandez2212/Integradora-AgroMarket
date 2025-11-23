@@ -72,6 +72,14 @@ nav {
     gap: 0.5rem !important;
 }
 
+.menu a i {
+    font-size: 0.9rem !important;
+}
+
+.menu a span {
+    display: inline !important;
+}
+
 .menu a:hover {
     background-color: var(--navbar-hover);
     transform: translateY(-2px);
@@ -82,54 +90,352 @@ nav {
     border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
+/* ===== BOTÓN HAMBURGUESA ===== */
+.menu-toggle {
+    display: none !important; /* Oculto por defecto, se muestra en móvil */
+    flex-direction: column !important;
+    justify-content: space-around !important;
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    background: transparent !important;
+    border: none !important;
+    cursor: pointer !important;
+    padding: 4px !important;
+    z-index: 1002 !important;
+    position: relative !important;
+    margin-right: 1rem !important;
+    align-items: center !important;
+    box-sizing: border-box !important;
+}
+
+.menu-toggle span {
+    width: 100% !important;
+    height: 3px !important;
+    background-color: var(--navbar-text) !important;
+    border-radius: 3px !important;
+    transition: all 0.3s ease !important;
+    display: block !important;
+    opacity: 1 !important;
+}
+
+.menu-toggle:hover span {
+    background-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.menu-toggle.active span:nth-child(1) {
+    transform: rotate(45deg) translate(8px, 8px) !important;
+}
+
+.menu-toggle.active span:nth-child(2) {
+    opacity: 0 !important;
+}
+
+.menu-toggle.active span:nth-child(3) {
+    transform: rotate(-45deg) translate(7px, -7px) !important;
+}
+
+/* ===== SIDEBAR LATERAL (oculto por defecto) ===== */
+.sidebar-menu {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 280px !important;
+    max-width: 85vw !important;
+    height: 100vh !important;
+    background-color: #ffffff !important;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.2) !important;
+    z-index: 1001 !important;
+    overflow-y: auto !important;
+    transform: translateX(-100%) !important;
+    transition: transform 0.3s ease !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* ===== HEADER DEL SIDEBAR (Foto de perfil y nombre) ===== */
+.sidebar-header-profile {
+    padding: 1.5rem 1.5rem 1rem 1.5rem !important;
+    border-bottom: 1px solid #e0e0e0 !important;
+    background-color: #f9f9f9 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 1rem !important;
+    flex-shrink: 0 !important;
+}
+
+.sidebar-profile-avatar {
+    width: 50px !important;
+    height: 50px !important;
+    border-radius: 50% !important;
+    overflow: hidden !important;
+    flex-shrink: 0 !important;
+    background-color: #e0e0e0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: relative !important;
+}
+
+.sidebar-profile-avatar img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+}
+
+.sidebar-profile-avatar i {
+    font-size: 2rem !important;
+    color: #999 !important;
+    display: block !important;
+}
+
+.sidebar-profile-avatar img[style*="display: none"] {
+    display: none !important;
+}
+
+.sidebar-profile-info {
+    flex: 1 !important;
+    min-width: 0 !important;
+}
+
+.sidebar-profile-name {
+    font-weight: 600 !important;
+    font-size: 1rem !important;
+    color: #333 !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.sidebar-profile-email {
+    font-size: 0.85rem !important;
+    color: #666 !important;
+    margin: 0.25rem 0 0 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.sidebar-menu.open {
+    transform: translateX(0) !important;
+}
+
+.sidebar-menu .menu {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    list-style: none !important;
+    width: 100% !important;
+    flex: 1 !important;
+    overflow-y: auto !important;
+}
+
+.sidebar-menu .menu a {
+    color: #000 !important;
+    text-decoration: none !important;
+    padding: 0.75rem 1rem 0.75rem 1.5rem !important;
+    border-radius: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0 !important;
+    font-weight: 500 !important;
+    font-size: 1rem !important;
+    border-bottom: 1px solid #e0e0e0 !important;
+    transition: all 0.2s ease !important;
+    position: relative !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    min-width: 100% !important;
+}
+
+.sidebar-menu .menu a i,
+.sidebar-menu .menu a .fas,
+.sidebar-menu .menu a .fa {
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+.sidebar-menu .menu a span {
+    display: inline !important;
+    flex: 1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.sidebar-menu .menu a:hover {
+    background-color: #f5f5f5 !important;
+    transform: none !important;
+}
+
+.sidebar-menu .menu a.activo {
+    background-color: #e8f5e9 !important;
+    border-left: 4px solid #2e7d32 !important;
+    color: #2e7d32 !important;
+    font-weight: 600 !important;
+    padding-left: calc(1.5rem - 4px) !important; /* Ajustar para compensar el borde */
+    margin-left: 0 !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+}
+
+.sidebar-menu .menu a.activo i {
+    color: #2e7d32 !important;
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+.sidebar-menu .menu a i,
+.sidebar-menu .menu a .fas,
+.sidebar-menu .menu a .fa,
+.sidebar-menu .menu a i.fas,
+.sidebar-menu .menu a i.fa {
+    font-size: 1.3rem !important;
+    width: 24px !important;
+    min-width: 24px !important;
+    text-align: center !important;
+    color: #666 !important;
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    font-family: "Font Awesome 6 Free", "Font Awesome 6 Pro", "FontAwesome" !important;
+    font-weight: 900 !important;
+    font-style: normal !important;
+    font-variant: normal !important;
+    text-rendering: auto !important;
+    line-height: 1 !important;
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+}
+
+/* Asegurar que los pseudo-elementos ::before de Font Awesome funcionen */
+.sidebar-menu .menu a i::before,
+.sidebar-menu .menu a .fas::before,
+.sidebar-menu .menu a .fa::before {
+    display: inline-block !important;
+    font-family: "Font Awesome 6 Free" !important;
+    font-weight: 900 !important;
+}
+
+/* Asegurar que los íconos específicos se muestren */
+.sidebar-menu .menu a i.fa-home,
+.sidebar-menu .menu a i.fa-plus-circle,
+.sidebar-menu .menu a i.fa-box,
+.sidebar-menu .menu a i.fa-chart-line,
+.sidebar-menu .menu a i.fa-comments,
+.sidebar-menu .menu a i.fa-user,
+.sidebar-menu .menu a i.fa-sign-out-alt,
+.sidebar-menu .menu a i.fas,
+.sidebar-menu .menu a i.fa {
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    font-family: "Font Awesome 6 Free" !important;
+    font-weight: 900 !important;
+}
+
+/* Asegurar que los pseudo-elementos ::before funcionen - solo como fallback */
+body .sidebar-menu .menu a i.fas::before,
+body .sidebar-menu .menu a i.fa::before {
+    display: inline-block !important;
+    font-family: "Font Awesome 6 Free" !important;
+    font-weight: 900 !important;
+}
+
+/* Reglas específicas para panel_vendedor - máxima especificidad */
+body[data-vendor-id] .sidebar-menu .menu a i,
+body[data-vendor-id] .sidebar-menu .menu a i.fas,
+body[data-vendor-id] .sidebar-menu .menu a i.fa {
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    font-family: "Font Awesome 6 Free" !important;
+    font-weight: 900 !important;
+    font-size: 1.3rem !important;
+    width: 24px !important;
+    min-width: 24px !important;
+    color: #666 !important;
+}
+
+body[data-vendor-id] .sidebar-menu .menu a.activo i {
+    color: #2e7d32 !important;
+}
+
+.sidebar-menu .menu a:last-child {
+    border-bottom: none !important;
+}
+
+/* ===== OVERLAY OSCURO (para móviles) ===== */
+.sidebar-overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background-color: rgba(0, 0, 0, 0.5) !important;
+    z-index: 1000 !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transition: opacity 0.3s ease, visibility 0.3s ease !important;
+}
+
+.sidebar-overlay.active {
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
+    /* Mostrar botón hamburguesa */
+    .menu-toggle {
+        display: flex !important;
+        order: -1 !important; /* Colocar al inicio */
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    /* Ocultar menú horizontal en móvil */
+    nav > .menu {
+        display: none !important;
+    }
+
+    /* Ocultar saludo en móvil */
+    .saludo-usuario {
+        display: none !important;
+    }
+
     nav {
-        padding: 1.2rem 2rem !important;
-        flex-direction: column !important;
-        gap: 1rem !important;
+        padding: 1rem 1.5rem !important;
+        justify-content: space-between !important;
+        flex-wrap: nowrap !important;
     }
 
     .nav-left {
-        flex-direction: column;
-        gap: 0.5rem;
-        text-align: center;
+        gap: 1rem;
+        flex: 1 !important;
     }
 
-    .menu {
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-
-    .menu a {
-        padding: 0.4rem 0.8rem;
-        font-size: 0.9rem;
+    .logo h2 {
+        font-size: 1.2rem !important;
     }
 }
 
 @media (max-width: 480px) {
     nav {
-        padding: 1rem 1.5rem !important;
+        padding: 0.8rem 1rem !important;
     }
 
-    .menu {
-        flex-direction: column;
-        gap: 0.5rem;
-        width: 100%;
-    }
-
-    .menu a {
-        width: 100%;
-        justify-content: center;
-        padding: 0.6rem 1rem;
-    }
-
-    .logo h2 {
-        font-size: 1.3rem;
-    }
-
-    .saludo-usuario {
-        font-size: 0.9rem;
+    .sidebar-menu {
+        width: 260px !important;
     }
 }
 
@@ -260,3 +566,4 @@ nav {
     border-radius: 0.75rem;
     font-size: 0.65rem;
 }
+

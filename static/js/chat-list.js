@@ -55,6 +55,47 @@
             mostrarEmptyState("No fue posible cargar tus chats en este momento.");
         });
 
+    // Función para ocultar conversación y mostrar placeholder
+    function ocultarConversacion() {
+        const placeholder = document.getElementById('chatPlaceholder');
+        const conversation = document.getElementById('chatConversation');
+        
+        if (placeholder && conversation) {
+            conversation.style.display = 'none';
+            placeholder.style.display = 'flex';
+            
+            // Remover clase para mostrar lista en móvil
+            conversation.classList.remove('chat-conversation-active');
+            const chatLayout = conversation.closest('.chat-layout');
+            if (chatLayout) {
+                chatLayout.classList.remove('has-active-conversation');
+            }
+            
+            // Ocultar botón volver móvil
+            const chatBackBtnMobile = document.getElementById('chatBackBtnMobile');
+            if (chatBackBtnMobile) {
+                chatBackBtnMobile.style.display = 'none';
+            }
+            
+            // Remover clase active de todos los chats
+            const chatItems = chatListEl.querySelectorAll('.chat-item');
+            chatItems.forEach(item => item.classList.remove('active'));
+        }
+    }
+
+    // Configurar botón volver para ocultar conversación en pantalla grande
+    const chatBackBtn = document.getElementById('chatBackBtn');
+    if (chatBackBtn) {
+        chatBackBtn.addEventListener('click', (e) => {
+            const isLargeScreen = window.innerWidth > 992;
+            if (isLargeScreen) {
+                e.preventDefault();
+                ocultarConversacion();
+            }
+            // En pantalla pequeña, dejar que el enlace navegue normalmente
+        });
+    }
+
     window.addEventListener("beforeunload", () => {
         limpiarSuscripciones();
     });
@@ -308,13 +349,8 @@
 
             previewEl.textContent = previewText;
 
-            const tag = document.createElement("span");
-            tag.className = "chat-tag";
-            tag.textContent = pedidoEtiqueta;
-
             info.appendChild(header);
             info.appendChild(previewEl);
-            info.appendChild(tag);
 
             const tieneNuevosMensajes = partner.unread > 0;
 
@@ -343,6 +379,27 @@
 
             enlace.appendChild(avatar);
             enlace.appendChild(info);
+
+            // Interceptar clic para cargar conversación dinámicamente en pantalla grande
+            enlace.addEventListener('click', (e) => {
+                const isLargeScreen = window.innerWidth > 992;
+                const placeholder = document.getElementById('chatPlaceholder');
+                const conversation = document.getElementById('chatConversation');
+                
+                // Solo interceptar si estamos en pantalla grande Y existen los elementos de conversación dinámica
+                if (isLargeScreen && placeholder && conversation) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    try {
+                        cargarConversacionDinamica(pedidoId, nombre, partnerId, iniciales, chat.id);
+                    } catch (error) {
+                        console.error('Error cargando conversación dinámica:', error);
+                        // Si hay error, permitir navegación normal
+                        window.location.href = enlace.href;
+                    }
+                }
+                // En pantalla pequeña o si no existen los elementos, dejar que el enlace navegue normalmente
+            });
 
             fragment.appendChild(enlace);
             } catch (error) {
@@ -561,6 +618,245 @@
         }
 
         emptyStateEl.style.display = "flex";
+    }
+
+    // Función para cargar conversación dinámicamente en pantalla grande
+    function cargarConversacionDinamica(pedidoId, partnerName, partnerId, iniciales, chatId) {
+        try {
+            const placeholder = document.getElementById('chatPlaceholder');
+            const conversation = document.getElementById('chatConversation');
+            const chatPartnerAvatar = document.getElementById('chatPartnerAvatar');
+            const chatPartnerName = document.getElementById('chatPartnerName');
+            const chatOrderLabel = document.getElementById('chatOrderLabel');
+            const chatOrderLink = document.getElementById('chatOrderLink');
+            const chatMessages = document.getElementById('chatMessages');
+            const chatMessagesLoading = document.getElementById('chatMessagesLoading');
+
+            if (!placeholder || !conversation) {
+                // Si no existen los elementos, navegar normalmente
+                console.warn('Elementos de conversación dinámica no encontrados, navegando normalmente');
+                return false;
+            }
+
+        // Ocultar placeholder y mostrar conversación
+        placeholder.style.display = 'none';
+        conversation.style.display = 'flex';
+        
+        // Agregar clase para ocultar lista en móvil y mostrar botón volver
+        conversation.classList.add('chat-conversation-active');
+        const chatLayout = conversation.closest('.chat-layout');
+        if (chatLayout) {
+            chatLayout.classList.add('has-active-conversation');
+        }
+        
+        // Mostrar botón volver móvil
+        const chatBackBtnMobile = document.getElementById('chatBackBtnMobile');
+        if (chatBackBtnMobile) {
+            chatBackBtnMobile.style.display = 'flex';
+        }
+
+        // Actualizar header
+        if (chatPartnerAvatar) {
+            chatPartnerAvatar.textContent = iniciales;
+        }
+        if (chatPartnerName) {
+            chatPartnerName.textContent = partnerName;
+        }
+        if (chatOrderLabel) {
+            chatOrderLabel.textContent = `Pedido #${pedidoId}`;
+        }
+        if (chatOrderLink) {
+            const orderLinkBase = body.dataset.orderLinkBase || 
+                (body.dataset.chatRole === 'comprador' ? '/comprador/detalle_pedido/' : '/vendedor/ventas?pedido=');
+            chatOrderLink.href = `${orderLinkBase}${pedidoId}`;
+        }
+
+        // Limpiar mensajes anteriores
+        if (chatMessages) {
+            chatMessages.innerHTML = '';
+            if (chatMessagesLoading) {
+                chatMessages.appendChild(chatMessagesLoading);
+                chatMessagesLoading.style.display = 'flex';
+            }
+        }
+
+        // Actualizar datos del body para que chat-conversation.js pueda usarlos
+        if (body) {
+            body.dataset.chatId = chatId || '';
+            body.dataset.pedidoId = pedidoId;
+            body.dataset.partnerId = partnerId || '';
+            body.dataset.partnerName = partnerName || '';
+        }
+
+        // Marcar el chat como activo en la lista
+        const chatItems = chatListEl.querySelectorAll('.chat-item');
+        chatItems.forEach(item => {
+            item.classList.remove('active');
+            if (item.dataset.chatId === chatId) {
+                item.classList.add('active');
+            }
+        });
+
+            // Inicializar el chat si chat-conversation.js está disponible
+            if (typeof window.inicializarChatDinamico === 'function') {
+                window.inicializarChatDinamico(pedidoId, partnerId, partnerName, chatId);
+            } else {
+                // Si no existe la función, cargar los mensajes manualmente
+                cargarMensajesChat(chatId, pedidoId);
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Error en cargarConversacionDinamica:', error);
+            return false;
+        }
+    }
+
+    // Función para cargar mensajes del chat
+    async function cargarMensajesChat(chatId, pedidoId) {
+        if (!db || !auth) {
+            return;
+        }
+
+        const chatMessages = document.getElementById('chatMessages');
+        const chatMessagesLoading = document.getElementById('chatMessagesLoading');
+        if (!chatMessages) return;
+
+        try {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            // Buscar el chat
+            const chatRef = db.collection('chats').doc(chatId);
+            const chatDoc = await chatRef.get();
+
+            if (!chatDoc.exists) {
+                if (chatMessagesLoading) chatMessagesLoading.style.display = 'none';
+                chatMessages.innerHTML = '<div class="chat-empty">No se encontró el chat.</div>';
+                return;
+            }
+
+            // Limpiar mensajes anteriores
+            chatMessages.innerHTML = '';
+            if (chatMessagesLoading) {
+                chatMessages.appendChild(chatMessagesLoading);
+                chatMessagesLoading.style.display = 'flex';
+            }
+
+            // Suscribirse a los mensajes
+            const messagesRef = chatRef.collection('messages').orderBy('created_at', 'asc');
+            
+            messagesRef.onSnapshot((snapshot) => {
+                if (chatMessagesLoading) chatMessagesLoading.style.display = 'none';
+                
+                chatMessages.innerHTML = '';
+                
+                if (snapshot.empty) {
+                    chatMessages.innerHTML = '<div class="chat-empty">No hay mensajes todavía.</div>';
+                    return;
+                }
+
+                snapshot.docs.forEach((doc) => {
+                    const mensaje = doc.data();
+                    const esMio = mensaje.sender_id === user.uid;
+                    const mensajeEl = crearElementoMensaje(mensaje, esMio);
+                    chatMessages.appendChild(mensajeEl);
+                });
+
+                // Scroll al final
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }, (error) => {
+                console.error('Error cargando mensajes:', error);
+                if (chatMessagesLoading) chatMessagesLoading.style.display = 'none';
+                chatMessages.innerHTML = '<div class="chat-error">Error al cargar mensajes.</div>';
+            });
+
+            // Configurar envío de mensajes
+            configurarEnvioMensajes(chatId, chatRef, user.uid);
+
+        } catch (error) {
+            console.error('Error en cargarMensajesChat:', error);
+            if (chatMessagesLoading) chatMessagesLoading.style.display = 'none';
+            if (chatMessages) {
+                chatMessages.innerHTML = '<div class="chat-error">Error al cargar el chat.</div>';
+            }
+        }
+    }
+
+    // Función para crear elemento de mensaje
+    function crearElementoMensaje(mensaje, esMio) {
+        const div = document.createElement('div');
+        div.className = `chat-message ${esMio ? 'chat-message-sent' : 'chat-message-received'}`;
+        
+        const texto = mensaje.message || mensaje.texto || mensaje.text || '';
+        const fecha = mensaje.created_at?.toDate ? mensaje.created_at.toDate() : new Date(mensaje.created_at);
+        const hora = fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+
+        div.innerHTML = `
+            <div class="chat-message-content">
+                <p>${texto}</p>
+                <span class="chat-message-time">${hora}</span>
+            </div>
+        `;
+
+        return div;
+    }
+
+    // Variable para almacenar los listeners de envío de mensajes
+    let currentSendMessageHandler = null;
+    let currentKeypressHandler = null;
+
+    // Función para configurar el envío de mensajes
+    function configurarEnvioMensajes(chatId, chatRef, userId) {
+        const chatInput = document.getElementById('chatInput');
+        const chatSendBtn = document.getElementById('chatSendBtn');
+
+        if (!chatInput || !chatSendBtn || !db) return;
+
+        // Remover listeners anteriores si existen
+        if (currentSendMessageHandler) {
+            chatSendBtn.removeEventListener('click', currentSendMessageHandler);
+        }
+        if (currentKeypressHandler) {
+            chatInput.removeEventListener('keypress', currentKeypressHandler);
+        }
+
+        const enviarMensaje = async () => {
+            const texto = chatInput.value.trim();
+            if (!texto) return;
+
+            chatInput.disabled = true;
+            chatSendBtn.disabled = true;
+
+            try {
+                const mensajeData = {
+                    sender_id: userId,
+                    message: texto,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp(),
+                    tipo: 'texto'
+                };
+
+                await chatRef.collection('messages').add(mensajeData);
+                chatInput.value = '';
+            } catch (error) {
+                console.error('Error enviando mensaje:', error);
+            } finally {
+                chatInput.disabled = false;
+                chatSendBtn.disabled = false;
+                chatInput.focus();
+            }
+        };
+
+        // Guardar referencias a los handlers
+        currentSendMessageHandler = enviarMensaje;
+        currentKeypressHandler = (e) => {
+            if (e.key === 'Enter') {
+                enviarMensaje();
+            }
+        };
+
+        chatSendBtn.addEventListener('click', currentSendMessageHandler);
+        chatInput.addEventListener('keypress', currentKeypressHandler);
     }
 })();
 

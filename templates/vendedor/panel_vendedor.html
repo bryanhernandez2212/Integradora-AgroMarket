@@ -4,11 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panel Vendedor</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-Yd3F2m9Uq+vR0NvKcJsteVEh9UpAJZciV06P88GJEqn3Ejj6+UeJ8V+RaH59RUW2KIiMzZljI0X58F3Rp3crJQ==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos_vendedor.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/breadcrumbs.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/navigation-header.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-Yd3F2m9Uq+vR0NvKcJsteVEh9UpAJZciV06P88GJEqn3Ejj6+UeJ8V+RaH59RUW2KIiMzZljI0X58F3Rp3crJQ==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="{{ url_for('static', filename='js/mobile-menu.js') }}" defer></script>
 
     <!-- PWA: Manifest y theme color -->
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
@@ -20,22 +21,89 @@
 
 </head>
 <body data-vendor-id="{{ usuario_id or '' }}" data-vendor-email="{{ correo or '' }}">
- <!--Menu-->
- <nav>
-    <div class="nav-left">
-        <div class="logo"><h2>AgroMarket</h2></div>
-        <div class="saludo-usuario">Hola, <strong>{{ nombre }}</strong></div>
-    </div>
-    <div class="menu">
-        <a href="/vendedor/panel" id="nav-inicio-vendedor" {% if page == 'inicio' %}class="activo"{% endif %}>Home</a>
-        <a href="/vendedor/agregar_producto" id="nav-agregar-vendedor" {% if page == 'agregar' %}class="activo"{% endif %}>Agregar Productos</a>
-        <a href="/vendedor/mis_productos" id="nav-mis-productos-vendedor" {% if page == 'productos' %}class="activo"{% endif %}>Mis Productos</a>
-        <a href="/vendedor/ventas" id="nav-ventas-vendedor" {% if page == 'ventas' %}class="activo"{% endif %}>Ventas</a>
-        <a href="/vendedor/chats" id="nav-chats-vendedor" {% if page == 'chats' %}class="activo"{% endif %}>Chats</a>
-        <a href="/auth/perfil" {% if page == 'perfil' %}class="activo"{% endif %}>Mi Perfil</a>
-        <a href="#" onclick="cerrarSesion()">Cerrar Sesión</a>
-    </div>
-</nav>
+    <!-- ===== Overlay para móviles ===== -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+    
+    <!--Menu-->
+    <nav>
+        <button class="menu-toggle" id="menu-toggle" aria-label="Abrir menú">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <div class="nav-left">
+            <div class="logo"><h2>AgroMarket</h2></div>
+            <div class="saludo-usuario">Hola, <strong>{{ nombre }}</strong></div>
+        </div>
+        <div class="menu">
+            <a href="/vendedor/panel" id="nav-inicio-vendedor" {% if page == 'inicio' %}class="activo"{% endif %}>
+                <i class="fas fa-home"></i>
+                <span>Home</span>
+            </a>
+            <a href="/vendedor/agregar_producto" id="nav-agregar-vendedor" {% if page == 'agregar' %}class="activo"{% endif %}>
+                <i class="fas fa-plus-circle"></i>
+                <span>Agregar Productos</span>
+            </a>
+            <a href="/vendedor/mis_productos" id="nav-mis-productos-vendedor" {% if page == 'productos' %}class="activo"{% endif %}>
+                <i class="fas fa-box"></i>
+                <span>Mis Productos</span>
+            </a>
+            <a href="/vendedor/ventas" id="nav-ventas-vendedor" {% if page == 'ventas' %}class="activo"{% endif %}>
+                <i class="fas fa-chart-line"></i>
+                <span>Ventas</span>
+            </a>
+            <a href="/vendedor/chats" id="nav-chats-vendedor" {% if page == 'chats' %}class="activo"{% endif %}>
+                <i class="fas fa-comments"></i>
+                <span>Chats</span>
+            </a>
+            <a href="/auth/perfil" {% if page == 'perfil' %}class="activo"{% endif %}>
+                <i class="fas fa-user"></i>
+                <span>Mi Perfil</span>
+            </a>
+            <a href="#" onclick="cerrarSesion()">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Cerrar Sesión</span>
+            </a>
+        </div>
+    </nav>
+    
+    <!-- ===== Sidebar para móviles ===== -->
+    <aside class="sidebar-menu" id="sidebar-menu">
+        <!-- Header con foto de perfil y nombre -->
+        <div class="sidebar-header-profile">
+            <div class="sidebar-profile-avatar" id="sidebar-profile-avatar">
+                <img id="sidebar-profile-avatar-img" src="" alt="Foto de perfil" style="display: none;">
+                <i class="fas fa-user-circle" id="sidebar-profile-avatar-icon"></i>
+            </div>
+            <div class="sidebar-profile-info">
+                <p class="sidebar-profile-name" id="sidebar-profile-name">{{ nombre }}</p>
+                <p class="sidebar-profile-email" id="sidebar-profile-email">{{ correo or '' }}</p>
+            </div>
+        </div>
+        <div class="menu">
+            <a href="/vendedor/panel" id="sidebar-inicio-vendedor" {% if page == 'inicio' %}class="activo"{% endif %}>
+                <span>Home</span>
+            </a>
+            <a href="/vendedor/agregar_producto" id="sidebar-agregar-vendedor" {% if page == 'agregar' %}class="activo"{% endif %}>
+                <span>Agregar Productos</span>
+            </a>
+            <a href="/vendedor/mis_productos" id="sidebar-mis-productos-vendedor" {% if page == 'productos' %}class="activo"{% endif %}>
+                <span>Mis Productos</span>
+            </a>
+            <a href="/vendedor/ventas" id="sidebar-ventas-vendedor" {% if page == 'ventas' %}class="activo"{% endif %}>
+                <span>Ventas</span>
+            </a>
+            <a href="/vendedor/chats" id="sidebar-chats-vendedor" {% if page == 'chats' %}class="activo"{% endif %}>
+                <span>Chats</span>
+            </a>
+            <a href="/auth/perfil" {% if page == 'perfil' %}class="activo"{% endif %}>
+                <span>Mi Perfil</span>
+            </a>
+            <a href="#" onclick="cerrarSesion()">
+                <span>Cerrar Sesión</span>
+            </a>
+        </div>
+    </aside>
 
 <main>
     <!-- Navigation Header -->
