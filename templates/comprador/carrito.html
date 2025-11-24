@@ -29,27 +29,21 @@
         </div>
         <div class="menu">
             <a href="{{ url_for('comprador.panel_comprador') }}" {% if page=='inicio' %}class="activo"{% endif %}>
-                <i class="fas fa-home"></i>
                 <span>Inicio</span>
             </a>
             <a href="{{ url_for('comprador.ver_productos') }}" {% if page=='productos' %}class="activo"{% endif %}>
-                <i class="fas fa-shopping-bag"></i>
                 <span>Productos</span>
             </a>
             <a href="{{ url_for('comprador.ver_carrito') }}" {% if page=='carrito' %}class="activo"{% endif %}>
-                <i class="fas fa-shopping-cart"></i>
                 <span>Carrito</span>
             </a>
             <a href="{{ url_for('comprador.chats') }}" {% if page=='chats' %}class="activo"{% endif %}>
-                <i class="fas fa-comments"></i>
                 <span>Chats</span>
             </a>
             <a href="{{ url_for('auth.perfil') }}" {% if page=='perfil' %}class="activo"{% endif %}>
-                <i class="fas fa-user"></i>
                 <span>Mi Perfil</span>
             </a>
             <a href="{{ url_for('auth.logout') }}">
-                <i class="fas fa-sign-out-alt"></i>
                 <span>Cerrar Sesión</span>
             </a>
         </div>
@@ -92,15 +86,6 @@
 
     <!-- ====== CONTENIDO PRINCIPAL ====== -->
     <main class="carrito-main">
-        <!-- Navigation Header -->
-        <div class="navigation-header">
-            <div></div>
-            <div class="breadcrumbs">
-                <a href="/comprador/panel">Inicio</a>
-                <span>/</span>
-                <span>Carrito</span>
-            </div>
-        </div>
         <!-- Flash Messages -->
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
@@ -641,28 +626,37 @@
 
             // Render de items
             const lista = izquierda.querySelector('#lista-carrito-din');
-            lista.innerHTML = carritoItems.map((item) => {
+            lista.innerHTML = carritoItems.map((item, index) => {
+                // Asegurar que tenemos los datos correctos
+                const nombre = item.nombre || 'Producto sin nombre';
                 const imagen = item.imagen && String(item.imagen).trim() !== '' ? item.imagen : '/static/images/product-placeholder.png';
+                const precio = Number(item.precio) || 0;
+                const cantidad = Number(item.cantidad) || 1;
+                const unidad = item.unidad || 'kg';
+                const origen = item.origen || 'Local';
+                
+                console.log(`Item ${index}:`, { nombre, imagen, precio, cantidad, unidad, origen });
+                
                 return `
                     <div class="producto-carrito-item" data-doc-id="${item._docId}">
                         <div class="producto-imagen">
-                            <img src="${imagen}" alt="${item.nombre}" loading="lazy" onerror="this.src='/static/images/product-placeholder.png'">
+                            <img src="${imagen}" alt="${nombre}" loading="lazy" onerror="this.src='/static/images/product-placeholder.png'">
                         </div>
                         <div class="producto-info">
-                            <h3>${item.nombre}</h3>
+                            <h3>${nombre}</h3>
                             <div class="producto-details">
-                                <span class="producto-origin">${item.origen || 'Local'} • ${item.unidad || 'kg'}</span>
+                                <span class="producto-origin">${origen} • ${unidad}</span>
                             </div>
                             <div class="producto-cantidad">
                                 <div class="cantidad-controls">
                                     <button class="btn-cantidad-carrito disminuir" onclick="actualizarCantidadDin('${item._docId}', -1)">-</button>
-                                    <span class="cantidad-display">${item.cantidad} ${item.unidad || 'kg'}</span>
+                                    <span class="cantidad-display">${cantidad} ${unidad}</span>
                                     <button class="btn-cantidad-carrito aumentar" onclick="actualizarCantidadDin('${item._docId}', 1)">+</button>
                                 </div>
                             </div>
                         </div>
                         <div class="producto-precio">
-                            <span>${currency(Number(item.precio) * Number(item.cantidad))}</span>
+                            <span>${currency(precio * cantidad)}</span>
                         </div>
                         <div class="producto-acciones">
                             <button class="btn-eliminar" onclick="eliminarItemDin('${item._docId}')" title="Eliminar del carrito">🗑️</button>
@@ -1104,18 +1098,23 @@
                     const direccionData = obtenerDireccionCompleta();
                     
                     // Guardar compra en Firestore
-                    await guardarCompraEnFirestore('tarjeta', paymentIntent.id, direccionData);
+                    const compraId = await guardarCompraEnFirestore('tarjeta', paymentIntent.id, direccionData);
                     
-                    // Limpiar carrito de Firestore
+                    // Limpiar carrito de Firestore PRIMERO (antes de redirigir)
                     const user = firebase.auth().currentUser;
                     if (user && db) {
-                        const carritoSnapshot = await db.collection('carrito')
-                            .where('usuario_id', '==', user.uid)
-                            .get();
-                        
-                        const deletePromises = carritoSnapshot.docs.map(doc => doc.ref.delete());
-                        await Promise.all(deletePromises);
-                        console.log('✅ Carrito limpiado de Firestore');
+                        try {
+                            const carritoSnapshot = await db.collection('carrito')
+                                .where('usuario_id', '==', user.uid)
+                                .get();
+                            
+                            const deletePromises = carritoSnapshot.docs.map(doc => doc.ref.delete());
+                            await Promise.all(deletePromises);
+                            console.log('✅ Carrito limpiado de Firestore');
+                        } catch (error) {
+                            console.error('❌ Error limpiando carrito:', error);
+                            // Continuar aunque falle la limpieza
+                        }
                     }
                     
                     // Guardar información del pago
@@ -1123,7 +1122,14 @@
                     localStorage.setItem('paymentIntentId', paymentIntent.id);
                     localStorage.setItem('paymentDate', new Date().toISOString());
                     
-                    // Redirigir a página de éxito
+                    // Enviar correo en background (no bloquear la redirección)
+                    if (compraId && user) {
+                        const userDoc = await db.collection('usuarios').doc(user.uid).get();
+                        const userData = userDoc.exists ? userDoc.data() : {};
+                        enviarCorreoEnBackground(compraId, user.email, userData, carritoItems, totalCarritoDin, 'tarjeta', direccionData);
+                    }
+                    
+                    // Redirigir inmediatamente a página de éxito
                     window.location.href = '/comprador/stripe-success';
                 }
 
@@ -1170,18 +1176,23 @@
                 const direccionData = obtenerDireccionCompleta();
 
                 // Guardar compra en Firestore
-                await guardarCompraEnFirestore(metodoPago, null, direccionData);
+                const compraId = await guardarCompraEnFirestore(metodoPago, null, direccionData);
 
-                // Limpiar carrito de Firestore
+                // Limpiar carrito de Firestore PRIMERO (antes de redirigir)
                 const user = firebase.auth().currentUser;
                 if (user && db) {
-                    const carritoSnapshot = await db.collection('carrito')
-                        .where('usuario_id', '==', user.uid)
-                        .get();
-                    
-                    const deletePromises = carritoSnapshot.docs.map(doc => doc.ref.delete());
-                    await Promise.all(deletePromises);
-                    console.log('✅ Carrito limpiado de Firestore');
+                    try {
+                        const carritoSnapshot = await db.collection('carrito')
+                            .where('usuario_id', '==', user.uid)
+                            .get();
+                        
+                        const deletePromises = carritoSnapshot.docs.map(doc => doc.ref.delete());
+                        await Promise.all(deletePromises);
+                        console.log('✅ Carrito limpiado de Firestore');
+                    } catch (error) {
+                        console.error('❌ Error limpiando carrito:', error);
+                        // Continuar aunque falle la limpieza
+                    }
                 }
 
                 // Guardar información del pago
@@ -1189,7 +1200,14 @@
                 localStorage.setItem('paymentMethod', metodoPago);
                 localStorage.setItem('paymentDate', new Date().toISOString());
 
-                // Redirigir a página de éxito
+                // Enviar correo en background (no bloquear la redirección)
+                if (compraId && user) {
+                    const userDoc = await db.collection('usuarios').doc(user.uid).get();
+                    const userData = userDoc.exists ? userDoc.data() : {};
+                    enviarCorreoEnBackground(compraId, user.email, userData, carritoItems, totalCarritoDin, metodoPago, direccionData);
+                }
+
+                // Redirigir inmediatamente a página de éxito
                 window.location.href = '/comprador/pago_exitoso';
             } catch (error) {
                 console.error('❌ Error procesando compra:', error);
@@ -1410,50 +1428,10 @@
                     // No bloquear la compra si falla la creación de chats
                 }
                 
-                // Enviar ticket de compra por correo
-                try {
-                    const fechaCompra = new Date().toLocaleString('es-MX', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
-                    
-                    const ticketData = {
-                        compra_id: compraRef.id,
-                        email_cliente: user.email,
-                        nombre_cliente: userData.nombre || user.displayName || 'Cliente',
-                        fecha_compra: fechaCompra,
-                        productos: productosConVendedor,
-                        subtotal: compraData.subtotal,
-                        envio: compraData.envio,
-                        impuestos: compraData.impuestos,
-                        total: compraData.total,
-                        metodo_pago: metodoPago,
-                        direccion_entrega: compraData.direccion_entrega
-                    };
-                    
-                    const response = await fetch('/comprador/enviar-ticket-compra', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(ticketData),
-                        credentials: 'same-origin'
-                    });
-                    
-                    if (response.ok) {
-                        console.log('✅ Ticket de compra enviado por correo');
-                    } else {
-                        console.warn('⚠️ No se pudo enviar el ticket por correo');
-                    }
-                } catch (emailError) {
-                    console.error('❌ Error enviando ticket por correo:', emailError);
-                    // No bloquear la compra si falla el envío del correo
-                }
+                // El correo se enviará en background después de la redirección
+                // No bloquear aquí para que la redirección sea inmediata
                 
-                // Enviar notificación push (si está disponible)
+                // Enviar notificación push (si está disponible) - también en background
                 try {
                     if (window.enviarNotificacionCompra) {
                         await window.enviarNotificacionCompra(
@@ -1487,6 +1465,66 @@
                 console.error('❌ Error guardando compra en Firestore:', error);
                 throw error;
             }
+        }
+
+        // Función para enviar correo en background (no bloquea)
+        async function enviarCorreoEnBackground(compraId, emailCliente, userData, productos, total, metodoPago, direccionData) {
+            // Ejecutar en background sin bloquear
+            setTimeout(async () => {
+                try {
+                    const fechaCompra = new Date().toLocaleString('es-MX', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    
+                    // Preparar productos para el correo
+                    const productosParaCorreo = productos.map(p => ({
+                        nombre: p.nombre || p.producto_nombre,
+                        cantidad: p.cantidad,
+                        unidad: p.unidad,
+                        precio_unitario: p.precio || p.precio_unitario,
+                        precio_total: (p.precio || p.precio_unitario) * (p.cantidad || 1)
+                    }));
+                    
+                    const subtotal = productos.reduce((acc, p) => acc + ((p.precio || p.precio_unitario) * (p.cantidad || 1)), 0);
+                    const impuestos = subtotal * 0.1;
+                    const envio = 4.50;
+                    
+                    const ticketData = {
+                        compra_id: compraId,
+                        email_cliente: emailCliente,
+                        nombre_cliente: userData.nombre || userData.displayName || 'Cliente',
+                        fecha_compra: fechaCompra,
+                        productos: productosParaCorreo,
+                        subtotal: subtotal,
+                        envio: envio,
+                        impuestos: impuestos,
+                        total: total,
+                        metodo_pago: metodoPago,
+                        direccion_entrega: direccionData || {}
+                    };
+                    
+                    const response = await fetch('/comprador/enviar-ticket-compra', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(ticketData),
+                        credentials: 'same-origin'
+                    });
+                    
+                    if (response.ok) {
+                        console.log('✅ Ticket de compra enviado por correo');
+                    } else {
+                        console.warn('⚠️ No se pudo enviar el ticket por correo');
+                    }
+                } catch (emailError) {
+                    console.error('❌ Error enviando ticket por correo:', emailError);
+                }
+            }, 100); // Ejecutar después de 100ms para no bloquear
         }
 
         // Funciones de Google Maps removidas - ahora se usa formulario manual

@@ -3,6 +3,14 @@
 
     let db;
     let productos = [];
+    let productosOriginales = [];
+    let queryBusqueda = '';
+    let ordenActual = null; // 'precio-asc', 'precio-desc', o null
+    let filtrosActivos = {
+        categorias: [],
+        unidades: [],
+        stock: true
+    };
 
     const rawCategoria = (document.body?.dataset?.categoria || '').trim();
     const categoriaActual = rawCategoria && rawCategoria.toLowerCase() !== 'none' ? rawCategoria : '';
@@ -140,13 +148,36 @@
                 });
             });
 
-            mostrarProductos(productos);
+            productosOriginales = [...productos];
+            // Aplicar filtros iniciales
+            aplicarFiltros();
         } catch (error) {
             console.error('Error cargando productos:', error);
             mostrarError('Error al cargar productos. Intenta recargar la página.');
         }
     }
         
+        // Ordenar productos según el orden actual
+        function ordenarProductos(productosParaOrdenar) {
+            if (!productosParaOrdenar || productosParaOrdenar.length === 0) {
+                return productosParaOrdenar;
+            }
+
+            if (!ordenActual) {
+                return productosParaOrdenar;
+            }
+
+            const productosOrdenados = [...productosParaOrdenar];
+
+            if (ordenActual === 'precio-asc') {
+                productosOrdenados.sort((a, b) => (a.precio || 0) - (b.precio || 0));
+            } else if (ordenActual === 'precio-desc') {
+                productosOrdenados.sort((a, b) => (b.precio || 0) - (a.precio || 0));
+            }
+
+            return productosOrdenados;
+        }
+
         // Mostrar productos en el grid con cards pequeñas
         function mostrarProductos(productosParaMostrar) {
             try {
@@ -158,6 +189,9 @@
                     if (noProducts) noProducts.style.display = 'block';
                     return;
                 }
+                
+                // Aplicar ordenamiento
+                productosParaMostrar = ordenarProductos(productosParaMostrar);
                 
                 // Mostrar productos
                 if (noProducts) noProducts.style.display = 'none';
@@ -249,11 +283,55 @@
     function verificarAutenticacion() {
         const user = firebase.auth().currentUser;
         if (user) {
-            console.log('✅ Usuario autenticado:', user.email);
+            console.log('✅ Usuario autenticado en Firebase:', user.email, user.uid);
             return true;
         }
-        console.log('❌ Usuario no autenticado');
+        console.log('❌ Usuario no autenticado en Firebase');
+        console.log('⚠️ Si estás logueado en Flask pero no en Firebase, necesitas iniciar sesión nuevamente');
         return false;
+    }
+    
+    // Función para esperar autenticación de Firebase
+    async function esperarAutenticacionFirebase(maxEspera = 5000) {
+        return new Promise((resolve) => {
+            const user = firebase.auth().currentUser;
+            if (user) {
+                resolve(user);
+                return;
+            }
+            
+            let tiempoEsperado = 0;
+            const intervalo = 500;
+            const maxIntentos = maxEspera / intervalo;
+            let intentos = 0;
+            
+            const verificar = setInterval(() => {
+                intentos++;
+                const currentUser = firebase.auth().currentUser;
+                
+                if (currentUser) {
+                    clearInterval(verificar);
+                    resolve(currentUser);
+                } else if (intentos >= maxIntentos) {
+                    clearInterval(verificar);
+                    resolve(null);
+                }
+            }, intervalo);
+            
+            // También escuchar cambios de autenticación
+            const unsubscribe = firebase.auth().onAuthStateChanged((user) => {
+                if (user) {
+                    clearInterval(verificar);
+                    unsubscribe();
+                    resolve(user);
+                }
+            });
+            
+            // Limpiar listener después de maxEspera
+            setTimeout(() => {
+                unsubscribe();
+            }, maxEspera);
+        });
     }
         
         // Función para mostrar estado de autenticación
@@ -268,38 +346,167 @@
         
         // Inicializar cuando se carga la página
     function manejarBusqueda(event) {
-        const query = (event.target.value || '').trim().toLowerCase();
-        if (query === '') {
-            mostrarProductos(productos);
-            return;
+        queryBusqueda = (event.target.value || '').trim().toLowerCase();
+        aplicarFiltros();
+    }
+
+    function aplicarFiltros() {
+        let productosFiltrados = productosOriginales.length > 0 ? productosOriginales : productos;
+
+        // Aplicar búsqueda primero
+        if (queryBusqueda !== '') {
+            productosFiltrados = productosFiltrados.filter((producto) =>
+                producto.nombre.toLowerCase().includes(queryBusqueda)
+                || producto.categoria.toLowerCase().includes(queryBusqueda)
+                || producto.vendedor_nombre.toLowerCase().includes(queryBusqueda)
+                || (producto.descripcion || '').toLowerCase().includes(queryBusqueda)
+            );
         }
 
-        const productosFiltrados = productos.filter((producto) =>
-            producto.nombre.toLowerCase().includes(query)
-            || producto.categoria.toLowerCase().includes(query)
-            || producto.vendedor_nombre.toLowerCase().includes(query)
-        );
+        // Filtrar por categorías
+        if (filtrosActivos.categorias.length > 0) {
+            productosFiltrados = productosFiltrados.filter(producto => {
+                const categoriaNormalizada = normalizarCategoria(producto.categoria);
+                return filtrosActivos.categorias.some(cat => {
+                    const catSinPrefijo = cat.replace('categoria-', '');
+                    return categoriaNormalizada === cat || 
+                           categoriaNormalizada === catSinPrefijo ||
+                           categoriaNormalizada.includes(catSinPrefijo) ||
+                           catSinPrefijo.includes(categoriaNormalizada);
+                });
+            });
+        }
+
+        // Filtrar por unidades
+        if (filtrosActivos.unidades.length > 0) {
+            productosFiltrados = productosFiltrados.filter(producto => {
+                const unidadNormalizada = (producto.unidad || '').toLowerCase().trim();
+                return filtrosActivos.unidades.some(uni => {
+                    const unidadFiltro = uni.replace('unidad-', '').toLowerCase();
+                    return unidadNormalizada === unidadFiltro || 
+                           unidadNormalizada.includes(unidadFiltro) ||
+                           unidadFiltro.includes(unidadNormalizada);
+                });
+            });
+        }
+
+        // Filtrar por stock (solo productos en stock)
+        if (filtrosActivos.stock) {
+            productosFiltrados = productosFiltrados.filter(producto => 
+                producto.stock > 0 && producto.activo === true
+            );
+        }
 
         mostrarProductos(productosFiltrados);
     }
 
+    function manejarFiltro(btn) {
+        const filterValue = btn.dataset.filter;
+        
+        if (!filterValue) return;
+
+        // Toggle del botón
+        btn.classList.toggle('active');
+        const estaActivo = btn.classList.contains('active');
+
+        // Manejar filtros de categoría
+        if (filterValue.startsWith('categoria-')) {
+            const categoria = filterValue.replace('categoria-', '');
+            if (estaActivo) {
+                if (!filtrosActivos.categorias.includes(categoria)) {
+                    filtrosActivos.categorias.push(categoria);
+                }
+            } else {
+                filtrosActivos.categorias = filtrosActivos.categorias.filter(c => c !== categoria);
+            }
+        }
+        // Manejar filtros de unidad
+        else if (filterValue.startsWith('unidad-')) {
+            const unidad = filterValue.replace('unidad-', '');
+            if (estaActivo) {
+                if (!filtrosActivos.unidades.includes(unidad)) {
+                    filtrosActivos.unidades.push(unidad);
+                }
+            } else {
+                filtrosActivos.unidades = filtrosActivos.unidades.filter(u => u !== unidad);
+            }
+        }
+        // Manejar filtro de stock
+        else if (filterValue === 'stock') {
+            filtrosActivos.stock = estaActivo;
+        }
+
+        aplicarFiltros();
+    }
+
     function registrarFiltrosSidebar() {
-        document.querySelectorAll('.filter-group').forEach((group) => {
-            group.querySelectorAll('.filter-btn').forEach((btn) => {
-                btn.addEventListener('click', function onFilterClick() {
-                    group.querySelectorAll('.filter-btn').forEach((b) => b.classList.remove('active'));
-                    this.classList.add('active');
-                });
+        // Registrar filtros del sidebar (desktop)
+        document.querySelectorAll('.filter-group .filter-btn').forEach((btn) => {
+            btn.addEventListener('click', function() {
+                manejarFiltro(this);
+            });
+        });
+
+        // Registrar filtros móviles
+        document.querySelectorAll('.filter-btn-mobile').forEach((btn) => {
+            btn.addEventListener('click', function() {
+                manejarFiltro(this);
             });
         });
     }
 
     function registrarControles() {
-        document.querySelectorAll('.control-btn').forEach((btn) => {
-            btn.addEventListener('click', function onControlClick() {
-                console.log('Control clickeado:', this.textContent);
+        // Dropdown de ordenamiento
+        const btnOrdenar = document.getElementById('btn-ordenar');
+        const sortMenu = document.getElementById('sort-dropdown-menu');
+        const sortLabel = document.getElementById('sort-label');
+
+        if (btnOrdenar && sortMenu) {
+            // Toggle del dropdown
+            btnOrdenar.addEventListener('click', function(e) {
+                e.stopPropagation();
+                sortMenu.classList.toggle('active');
             });
-        });
+
+            // Cerrar dropdown al hacer clic fuera
+            document.addEventListener('click', function(e) {
+                if (!btnOrdenar.contains(e.target) && !sortMenu.contains(e.target)) {
+                    sortMenu.classList.remove('active');
+                }
+            });
+
+            // Manejar selección de ordenamiento
+            sortMenu.querySelectorAll('.sort-option').forEach(option => {
+                option.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const sortValue = this.dataset.sort;
+                    
+                    // Actualizar orden actual
+                    ordenActual = sortValue;
+                    
+                    // Actualizar label del botón
+                    if (sortValue === 'precio-asc') {
+                        sortLabel.textContent = 'Menor a mayor';
+                    } else if (sortValue === 'precio-desc') {
+                        sortLabel.textContent = 'Mayor a menor';
+                    }
+                    
+                    // Remover active de todas las opciones
+                    sortMenu.querySelectorAll('.sort-option').forEach(opt => {
+                        opt.classList.remove('active');
+                    });
+                    
+                    // Agregar active a la opción seleccionada
+                    this.classList.add('active');
+                    
+                    // Cerrar dropdown
+                    sortMenu.classList.remove('active');
+                    
+                    // Aplicar ordenamiento
+                    aplicarFiltros();
+                });
+            });
+        }
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
@@ -337,7 +544,90 @@
 
         registrarFiltrosSidebar();
         registrarControles();
+        registrarModalFiltros();
     });
+
+    // ===== Funciones para el modal de filtros =====
+    function abrirModalFiltros() {
+        const overlay = document.getElementById('filters-overlay');
+        const modal = document.getElementById('filters-modal');
+        
+        if (overlay && modal) {
+            overlay.classList.add('active');
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function cerrarModalFiltros() {
+        const overlay = document.getElementById('filters-overlay');
+        const modal = document.getElementById('filters-modal');
+        
+        if (overlay && modal) {
+            overlay.classList.remove('active');
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+    }
+
+    function limpiarFiltros() {
+        // Limpiar todos los filtros activos
+        filtrosActivos.categorias = [];
+        filtrosActivos.unidades = [];
+        filtrosActivos.stock = true;
+
+        // Remover clase active de todos los botones de filtro
+        document.querySelectorAll('.filter-btn-mobile, .filter-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+
+        // Activar solo el filtro de stock
+        document.querySelectorAll('[data-filter="stock"]').forEach(btn => {
+            btn.classList.add('active');
+        });
+
+        // Aplicar filtros (solo stock)
+        aplicarFiltros();
+    }
+
+    function registrarModalFiltros() {
+        // Botón para abrir modal
+        const btnFiltrar = document.getElementById('btn-filtrar');
+        if (btnFiltrar) {
+            btnFiltrar.addEventListener('click', abrirModalFiltros);
+        }
+
+        // Botón para cerrar modal
+        const btnCerrar = document.getElementById('filters-modal-close');
+        if (btnCerrar) {
+            btnCerrar.addEventListener('click', cerrarModalFiltros);
+        }
+
+        // Overlay para cerrar al hacer clic fuera
+        const overlay = document.getElementById('filters-overlay');
+        if (overlay) {
+            overlay.addEventListener('click', cerrarModalFiltros);
+        }
+
+        // Botón limpiar filtros
+        const btnLimpiar = document.getElementById('btn-limpiar-filtros');
+        if (btnLimpiar) {
+            btnLimpiar.addEventListener('click', limpiarFiltros);
+        }
+
+        // Botón aplicar filtros (cierra el modal)
+        const btnAplicar = document.getElementById('btn-aplicar-filtros');
+        if (btnAplicar) {
+            btnAplicar.addEventListener('click', cerrarModalFiltros);
+        }
+
+        // Cerrar modal con ESC
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                cerrarModalFiltros();
+            }
+        });
+    }
 
         // Función para cambiar cantidad
         function cambiarCantidad(productoId, cambio) {
@@ -385,6 +675,30 @@
                     throw new Error('Base de datos no está disponible');
                 }
                 
+                // Esperar a que el usuario esté autenticado en Firebase
+                console.log('🔍 Verificando autenticación en Firebase...');
+                let user = await esperarAutenticacionFirebase(3000);
+                
+                if (!user) {
+                    console.error('❌ Usuario no autenticado en Firebase');
+                    console.error('⚠️ El usuario puede estar autenticado en Flask pero no en Firebase');
+                    mostrarNotificacion('❌ No estás autenticado en el sistema. Por favor, <a href="/auth/login" style="color: white; text-decoration: underline;">inicia sesión</a> nuevamente.', 'error');
+                    return;
+                }
+                
+                console.log('👤 Usuario autenticado en Firebase:', user.uid, user.email);
+                
+                // Verificar que el token de autenticación sea válido
+                let token = null;
+                try {
+                    token = await user.getIdToken(true); // Forzar refresco del token
+                    console.log('✅ Token de autenticación válido');
+                } catch (authError) {
+                    console.error('❌ Error obteniendo token:', authError);
+                    mostrarNotificacion('❌ Tu sesión ha expirado. Por favor, <a href="/auth/login" style="color: white; text-decoration: underline;">inicia sesión</a> nuevamente.', 'error');
+                    return;
+                }
+                
                 const producto = productos.find(p => p.id === productoId);
                 if (!producto) {
                     console.error('❌ Producto no encontrado:', productoId);
@@ -400,56 +714,82 @@
                     return;
                 }
                 
-                // Obtener usuario actual
-                const user = firebase.auth().currentUser;
-                if (!user) {
-                    console.log('❌ Usuario no autenticado');
-                    mostrarNotificacion('❌ Debes estar logueado para agregar productos al carrito');
-                    return;
+                // Obtener datos actualizados del producto desde Firestore
+                let productoActual = null;
+                try {
+                    const productoDoc = await db.collection('productos').doc(productoId).get();
+                    if (productoDoc.exists) {
+                        productoActual = { id: productoDoc.id, ...productoDoc.data() };
+                    }
+                } catch (error) {
+                    console.warn('⚠️ No se pudo obtener producto actualizado, usando datos locales:', error);
+                    productoActual = producto;
                 }
                 
-                console.log('👤 Usuario autenticado:', user.uid);
-                
                 // Verificar si el producto ya está en el carrito
+                console.log('🔍 Buscando producto en carrito...', {
+                    usuario_id: user.uid,
+                    producto_id: productoId
+                });
+                
                 const carritoSnapshot = await db.collection('carrito')
                     .where('usuario_id', '==', user.uid)
                     .where('producto_id', '==', productoId)
                     .get();
                 
+                console.log('📋 Items encontrados en carrito:', carritoSnapshot.size);
+                
                 if (!carritoSnapshot.empty) {
                     // Si ya existe, actualizar la cantidad
                     const itemExistente = carritoSnapshot.docs[0];
-                    const nuevaCantidad = itemExistente.data().cantidad + cantidad;
+                    const cantidadActual = itemExistente.data().cantidad || 0;
+                    const nuevaCantidad = cantidadActual + cantidad;
+                    const stockDisponible = (productoActual?.stock || producto.stock);
                     
-                    if (nuevaCantidad > producto.stock) {
-                        mostrarNotificacion('❌ No hay suficiente stock disponible');
+                    if (nuevaCantidad > stockDisponible) {
+                        mostrarNotificacion(`❌ No hay suficiente stock disponible. Stock: ${stockDisponible} ${producto.unidad}`);
                         return;
                     }
                     
-                    await db.collection('carrito').doc(itemExistente.id).update({
-                        cantidad: nuevaCantidad,
-                        fecha_agregado: new Date().toISOString()
+                    console.log('📝 Actualizando item existente en carrito...', {
+                        item_id: itemExistente.id,
+                        nueva_cantidad: nuevaCantidad
                     });
                     
+                    await db.collection('carrito').doc(itemExistente.id).update({
+                        cantidad: nuevaCantidad,
+                        fecha_agregado: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    
+                    console.log('✅ Item actualizado exitosamente');
                     mostrarNotificacion(`✅ ${cantidad} ${producto.unidad} más de ${producto.nombre} agregado al carrito`);
                 } else {
                     // Si no existe, crear nuevo item
+                    const vendedorId = productoActual?.vendedor_id || productoActual?.vendedorId || '';
+                    
                     const itemCarrito = {
                         producto_id: productoId,
                         nombre: producto.nombre,
                         precio: producto.precio,
                         cantidad: cantidad,
                         unidad: producto.unidad,
-                        imagen: producto.imagen,
-                        vendedor_nombre: producto.vendedor_nombre,
-                        fecha_agregado: new Date().toISOString(),
+                        imagen: producto.imagen || '',
+                        vendedor_nombre: producto.vendedor_nombre || 'N/A',
+                        vendedor_id: vendedorId,
+                        fecha_agregado: firebase.firestore.FieldValue.serverTimestamp(),
                         usuario_id: user.uid,
-                        categoria: producto.categoria,
-                        origen: producto.origen
+                        categoria: producto.categoria || 'otros',
+                        origen: producto.origen || 'Local'
                     };
                     
                     console.log('📝 Agregando nuevo item al carrito:', itemCarrito);
-                    await db.collection('carrito').add(itemCarrito);
+                    console.log('🔐 Verificando permisos antes de agregar...');
+                    console.log('   - Usuario autenticado:', user.uid);
+                    console.log('   - usuario_id en item:', itemCarrito.usuario_id);
+                    console.log('   - Coinciden:', user.uid === itemCarrito.usuario_id);
+                    
+                    const docRef = await db.collection('carrito').add(itemCarrito);
+                    console.log('✅ Item agregado exitosamente con ID:', docRef.id);
                     
                     mostrarNotificacion(`✅ ${cantidad} ${producto.unidad} de ${producto.nombre} agregado al carrito`);
                 }
@@ -468,12 +808,23 @@
                     stack: error.stack
                 });
                 
+                // Verificar estado de autenticación actual
+                const currentUser = firebase.auth().currentUser;
+                console.log('🔍 Estado de autenticación actual:', currentUser ? `Autenticado: ${currentUser.email}` : 'No autenticado');
+                
                 let mensajeError = '❌ Error al agregar al carrito. Intenta nuevamente.';
                 
                 if (error.code === 'permission-denied') {
-                    mensajeError = '❌ No tienes permisos para agregar al carrito';
+                    if (!currentUser) {
+                        mensajeError = '❌ No estás autenticado. Por favor, <a href="/auth/login" style="color: white; text-decoration: underline;">inicia sesión</a> para agregar productos al carrito.';
+                    } else {
+                        mensajeError = '❌ No tienes permisos para agregar al carrito. Esto puede deberse a un problema con las reglas de seguridad de Firestore. Contacta al administrador.';
+                        console.error('❌ Usuario autenticado pero sin permisos. UID:', currentUser.uid);
+                    }
                 } else if (error.code === 'unavailable') {
-                    mensajeError = '❌ Servicio no disponible. Verifica tu conexión';
+                    mensajeError = '❌ Servicio no disponible. Verifica tu conexión a internet.';
+                } else if (error.code === 'unauthenticated' || (error.message && error.message.includes('auth'))) {
+                    mensajeError = '❌ Tu sesión ha expirado. Por favor, <a href="/auth/login" style="color: white; text-decoration: underline;">inicia sesión</a> nuevamente.';
                 }
                 
                 mostrarNotificacion(mensajeError);

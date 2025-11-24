@@ -29,27 +29,21 @@
         </div>
         <div class="menu">
             <a href="{{ url_for('comprador.panel_comprador') }}" class="{% if page=='inicio' %}activo{% endif %}">
-                <i class="fas fa-home"></i>
                 <span>Inicio</span>
             </a>
             <a href="{{ url_for('comprador.ver_productos') }}" class="{% if page=='productos' %}activo{% endif %}">
-                <i class="fas fa-shopping-bag"></i>
                 <span>Productos</span>
             </a>
             <a href="{{ url_for('comprador.ver_carrito') }}" class="{% if page=='carrito' %}activo{% endif %}">
-                <i class="fas fa-shopping-cart"></i>
                 <span>Carrito</span>
             </a>
             <a href="{{ url_for('comprador.chats') }}" class="{% if page=='chats' %}activo{% endif %}">
-                <i class="fas fa-comments"></i>
                 <span>Chats</span>
             </a>
             <a href="{{ url_for('auth.perfil') }}" class="{% if page=='perfil' %}activo{% endif %}">
-                <i class="fas fa-user"></i>
                 <span>Mi Perfil</span>
             </a>
             <a href="{{ url_for('auth.logout') }}">
-                <i class="fas fa-sign-out-alt"></i>
                 <span>Cerrar Sesión</span>
             </a>
         </div>
@@ -108,39 +102,161 @@
             </div>
             <div class="categoria-controls">
                 <input type="text" placeholder="Buscar en productos..." class="search-input">
-                <button class="control-btn">Ordenar por</button>
-                <button class="control-btn">Precio</button>
-                <button class="control-btn">Ubicación</button>
+                <div class="sort-dropdown-container">
+                    <button class="control-btn sort-dropdown-btn" id="btn-ordenar">
+                        <span id="sort-label">Ordenar por</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="sort-dropdown-menu" id="sort-dropdown-menu">
+                        <button class="sort-option" data-sort="precio-asc">
+                            <i class="fas fa-sort-amount-down-alt"></i>
+                            <span>Precio: Menor a mayor</span>
+                        </button>
+                        <button class="sort-option" data-sort="precio-desc">
+                            <i class="fas fa-sort-amount-up-alt"></i>
+                            <span>Precio: Mayor a menor</span>
+                        </button>
+                    </div>
+                </div>
+                <button class="control-btn filter-toggle-btn" id="btn-filtrar">
+                    <i class="fas fa-filter"></i>
+                    <span>Filtrar</span>
+                </button>
             </div>
         </header>
 
+        <!-- ===== Overlay para modal de filtros ===== -->
+        <div class="filters-overlay" id="filters-overlay"></div>
+
+        <!-- ===== Modal de filtros móviles ===== -->
+        <aside class="filters-modal" id="filters-modal">
+            <div class="filters-modal-header">
+                <h3>Filtros</h3>
+                <button class="filters-modal-close" id="filters-modal-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="filters-modal-content">
+                <div class="filter-group-mobile">
+                    <h4>Disponibilidad</h4>
+                    <button class="filter-btn-mobile active" data-filter="stock">
+                        <i class="fas fa-check-circle"></i>
+                        <span>En stock</span>
+                    </button>
+                </div>
+                <div class="filter-group-mobile">
+                    <h4>Categoría</h4>
+                    <div class="filter-buttons-mobile-grid">
+                        <button class="filter-btn-mobile" data-filter="categoria-frutas">
+                            <i class="fas fa-apple-alt"></i>
+                            <span>Frutas</span>
+                        </button>
+                        <button class="filter-btn-mobile" data-filter="categoria-verduras">
+                            <i class="fas fa-carrot"></i>
+                            <span>Verduras</span>
+                        </button>
+                        <button class="filter-btn-mobile" data-filter="categoria-granos">
+                            <i class="fas fa-seedling"></i>
+                            <span>Granos</span>
+                        </button>
+                        <button class="filter-btn-mobile" data-filter="categoria-lacteos">
+                            <i class="fas fa-cheese"></i>
+                            <span>Lácteos</span>
+                        </button>
+                        <button class="filter-btn-mobile" data-filter="categoria-carnes">
+                            <i class="fas fa-drumstick-bite"></i>
+                            <span>Carnes</span>
+                        </button>
+                        <button class="filter-btn-mobile" data-filter="categoria-otros">
+                            <i class="fas fa-box"></i>
+                            <span>Otros</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="filter-group-mobile">
+                    <h4>Presentación</h4>
+                    <div class="filter-buttons-mobile-grid">
+                        <button class="filter-btn-mobile" data-filter="unidad-kg">
+                            <i class="fas fa-weight"></i>
+                            <span>Kg</span>
+                        </button>
+                        <button class="filter-btn-mobile" data-filter="unidad-caja">
+                            <i class="fas fa-box"></i>
+                            <span>Caja</span>
+                        </button>
+                        <button class="filter-btn-mobile" data-filter="unidad-bulto">
+                            <i class="fas fa-cube"></i>
+                            <span>Bulto</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="filters-modal-footer">
+                <button class="btn-limpiar-filtros" id="btn-limpiar-filtros">Limpiar filtros</button>
+                <button class="btn-aplicar-filtros" id="btn-aplicar-filtros">Aplicar filtros</button>
+            </div>
+        </aside>
+
         <div class="productos-layout">
-            <!-- ===== Sidebar de filtros ===== -->
+            <!-- ===== Sidebar de filtros (desktop) ===== -->
             <aside class="filters-sidebar">
                 <h3>Filtros</h3>
                 
                 <div class="filter-group">
                     <h4>Disponibilidad</h4>
                     <div class="filter-buttons">
-                        <button class="filter-btn active">En stock</button>
-                        <button class="filter-btn">Pre-orden</button>
+                        <button class="filter-btn active" data-filter="stock">
+                            <i class="fas fa-check-circle"></i>
+                            <span>En stock</span>
+                        </button>
                     </div>
                 </div>
 
                 <div class="filter-group">
-                    <h4>Tipo</h4>
+                    <h4>Categoría</h4>
                     <div class="filter-buttons">
-                        <button class="filter-btn active">Orgánico</button>
-                        <button class="filter-btn">Convencional</button>
+                        <button class="filter-btn" data-filter="categoria-frutas">
+                            <i class="fas fa-apple-alt"></i>
+                            <span>Frutas</span>
+                        </button>
+                        <button class="filter-btn" data-filter="categoria-verduras">
+                            <i class="fas fa-carrot"></i>
+                            <span>Verduras</span>
+                        </button>
+                        <button class="filter-btn" data-filter="categoria-granos">
+                            <i class="fas fa-seedling"></i>
+                            <span>Granos</span>
+                        </button>
+                        <button class="filter-btn" data-filter="categoria-lacteos">
+                            <i class="fas fa-cheese"></i>
+                            <span>Lácteos</span>
+                        </button>
+                        <button class="filter-btn" data-filter="categoria-carnes">
+                            <i class="fas fa-drumstick-bite"></i>
+                            <span>Carnes</span>
+                        </button>
+                        <button class="filter-btn" data-filter="categoria-otros">
+                            <i class="fas fa-box"></i>
+                            <span>Otros</span>
+                        </button>
                     </div>
                 </div>
 
                 <div class="filter-group">
                     <h4>Presentación</h4>
                     <div class="filter-buttons">
-                        <button class="filter-btn active">Kg</button>
-                        <button class="filter-btn">Caja</button>
-                        <button class="filter-btn">Bulto</button>
+                        <button class="filter-btn" data-filter="unidad-kg">
+                            <i class="fas fa-weight"></i>
+                            <span>Kg</span>
+                        </button>
+                        <button class="filter-btn" data-filter="unidad-caja">
+                            <i class="fas fa-box"></i>
+                            <span>Caja</span>
+                        </button>
+                        <button class="filter-btn" data-filter="unidad-bulto">
+                            <i class="fas fa-cube"></i>
+                            <span>Bulto</span>
+                        </button>
                     </div>
                 </div>
             </aside>

@@ -7,8 +7,17 @@
     gap: 0.5rem;
     margin: 1.5rem auto 2rem auto;
     padding: 0 1.5rem;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     max-width: 1200px;
+    font-weight: 500;
+}
+
+/* Breadcrumb dentro del carrito - sin padding para que no se sobrepase */
+.carrito-main .breadcrumbs,
+.carrito-main .breadcrumb {
+    margin: 0;
+    padding: 0;
+    max-width: 100%;
 }
 
 /* Breadcrumb en página de productos - alineado a la derecha */
@@ -28,6 +37,7 @@
     transition: color 0.2s ease;
     cursor: pointer;
     pointer-events: auto;
+    font-weight: 600;
 }
 
 .breadcrumbs a:hover,
@@ -38,7 +48,8 @@
 
 .breadcrumbs span,
 .breadcrumb span {
-    color: #666;
+    color: #333;
+    font-weight: 500;
 }
 
 .breadcrumbs span i,
