@@ -441,6 +441,33 @@
                         };
 
                         await db.collection('usuarios').doc(user.uid).set(userData, { merge: true });
+                        
+                        // IMPORTANTE: Sincronizar sesión con Flask antes de redirigir
+                        try {
+                            console.log('🔄 Sincronizando sesión con Flask después del registro...');
+                            const syncResponse = await fetch('/auth/sincronizar-rol', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'same-origin',
+                                body: JSON.stringify({
+                                    user_id: user.uid,
+                                    roles: roles,
+                                    rol_activo: rol.toLowerCase(),
+                                    nombre: nombre,
+                                    email: email
+                                })
+                            });
+                            
+                            if (syncResponse.ok) {
+                                const syncData = await syncResponse.json();
+                                console.log('✅ Sesión sincronizada con Flask:', syncData);
+                            } else {
+                                console.warn('⚠️ Error en respuesta de sincronización:', await syncResponse.text());
+                            }
+                        } catch (syncError) {
+                            console.error('❌ Error sincronizando sesión con Flask:', syncError);
+                            // Continuar con la redirección aunque falle la sincronización
+                        }
                     }
 
                     // Redirigir según rol elegido (nota: el flujo de vendedor ya hizo signOut y retornó)
@@ -448,6 +475,9 @@
                     if (rol === 'administrador') {
                         redirectUrl = '/admin/panel';
                     }
+                    
+                    // Pequeño delay para asegurar que la sincronización se complete
+                    await new Promise(resolve => setTimeout(resolve, 300));
                     window.location.href = redirectUrl;
 
                 } catch (err) {
