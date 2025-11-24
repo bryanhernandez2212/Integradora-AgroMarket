@@ -251,13 +251,12 @@
                                     <div class="producto-image-popular">
                                         ${producto.imagen ? 
                                             `<img id="${imagenId}" 
-                                                  data-src="${producto.imagen}" 
+                                                  src="${producto.imagen}" 
                                                   alt="${producto.nombre}" 
                                                   loading="lazy"
-                                                  style="display: none;"
-                                                  onload="this.style.display='block'; document.getElementById('${placeholderId}').style.display='none';"
+                                                  style="display: block; width: 100%; height: 100%; object-fit: cover;"
                                                   onerror="console.warn('Error cargando imagen:', this.src); this.style.display='none'; const placeholder = document.getElementById('${placeholderId}'); if(placeholder) placeholder.style.display='flex';">
-                                             <div id="${placeholderId}" class="producto-placeholder-popular">
+                                             <div id="${placeholderId}" class="producto-placeholder-popular" style="display: none;">
                                                  <i class="fas fa-box"></i>
                                              </div>` :
                                             `<div class="producto-placeholder-popular">
@@ -276,35 +275,6 @@
                         }).join('');
 
                     productosGrid.innerHTML = productosHTML;
-                    
-                    // Cargar imágenes de forma asíncrona después de insertar el HTML
-                    setTimeout(() => {
-                        productosLimitados.forEach(producto => {
-                            if (producto.imagen) {
-                                const img = document.getElementById(`producto-img-${producto.id}`);
-                                const placeholder = document.getElementById(`producto-placeholder-${producto.id}`);
-                                
-                                if (img && img.dataset.src) {
-                                    // Intentar cargar la imagen directamente
-                                    // Si falla, el onerror handler mostrará el placeholder
-                                    img.src = img.dataset.src;
-                                    
-                                    // Timeout de seguridad: si después de 3 segundos no se cargó, mostrar placeholder
-                                    setTimeout(() => {
-                                        if (img && (!img.complete || !img.naturalWidth)) {
-                                            console.warn('⚠️ Timeout cargando imagen del producto:', producto.id);
-                                            if (placeholder) {
-                                                placeholder.style.display = 'flex';
-                                            }
-                                            if (img) {
-                                                img.style.display = 'none';
-                                            }
-                                        }
-                                    }, 3000);
-                                }
-                            }
-                        });
-                    }, 100);
                 }
             }
 

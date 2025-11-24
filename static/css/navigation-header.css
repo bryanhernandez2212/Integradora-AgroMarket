@@ -8,21 +8,64 @@
     margin-bottom: 1.5rem;
     padding: 0 1.5rem;
     flex-wrap: wrap;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 /* Cuando está dentro de carrito-main, debe ocupar ambas columnas */
 .carrito-main > .navigation-header {
     grid-column: 1 / -1;
-    margin-left: 1rem;
-    margin-right: 1rem;
+    margin: 0;
+    padding: 1rem 0 0 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    width: 100%;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0;
+    overflow: hidden;
+    position: relative;
+    padding-right: 1rem;
 }
 
 .navigation-header .breadcrumbs,
 .navigation-header .breadcrumb {
     margin: 0;
     padding: 0;
-    max-width: none;
+    max-width: 100%;
+    width: auto;
     justify-content: flex-end;
+    overflow: visible;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+/* Breadcrumb dentro del carrito - alineado a la derecha sin sobrepasar */
+.carrito-main > .navigation-header .breadcrumbs,
+.carrito-main > .navigation-header .breadcrumb {
+    justify-content: flex-end;
+    margin: 0;
+    padding: 0;
+    width: auto;
+    max-width: 100%;
+    flex-shrink: 0;
+    min-width: 0;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.carrito-main > .navigation-header .breadcrumbs a,
+.carrito-main > .navigation-header .breadcrumb a {
+    color: #2e8b57;
+    font-weight: 600;
+}
+
+.carrito-main > .navigation-header .breadcrumbs span,
+.carrito-main > .navigation-header .breadcrumb span {
+    color: #333;
+    font-weight: 500;
 }
 
 /* Back Button común */

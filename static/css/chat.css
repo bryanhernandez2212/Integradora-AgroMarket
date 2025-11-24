@@ -665,9 +665,10 @@
         font-size: 1.1rem;
     }
     
-    /* Mostrar botón móvil cuando hay conversación activa */
+    /* Mostrar botón móvil cuando hay conversación activa o en página de conversación individual */
     #chatConversation.chat-conversation-active .chat-back-btn-mobile,
-    .chat-conversation.chat-conversation-active .chat-back-btn-mobile {
+    .chat-conversation.chat-conversation-active .chat-back-btn-mobile,
+    .chat-conversation:not(#chatConversation) .chat-back-btn-mobile {
         display: flex !important;
     }
     

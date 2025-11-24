@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos_comprador.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <script src="{{ url_for('static', filename='js/mobile-menu.js') }}" defer></script>
 
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -27,31 +28,81 @@
     data-empty-message="No tienes conversaciones aún."
     data-order-link-base="/comprador/detalle_pedido/"
 >
+    <!-- ===== Overlay para móviles ===== -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+    
     <nav>
+        <button class="menu-toggle" id="menu-toggle" aria-label="Abrir menú">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
         <div class="nav-left">
             <div class="logo"><h2>AgroMarket</h2></div>
             <div class="saludo-usuario">Hola, <strong>{{ nombre }}</strong></div>
         </div>
         <div class="menu">
-            <a href="/comprador/panel">Inicio</a>
-            <a href="/comprador/productos">Productos</a>
-            <a href="/comprador/carrito">Carrito</a>
-            <a href="/comprador/chats" {% if page == 'chats' %}class="activo"{% endif %}>Chats</a>
-            <a href="/auth/perfil" {% if page == 'perfil' %}class="activo"{% endif %}>Mi Perfil</a>
-            <a href="/auth/logout">Cerrar Sesión</a>
+            <a href="{{ url_for('comprador.panel_comprador') }}" class="{% if page=='inicio' %}activo{% endif %}">
+                <span>Inicio</span>
+            </a>
+            <a href="{{ url_for('comprador.ver_productos') }}" class="{% if page=='productos' %}activo{% endif %}">
+                <span>Productos</span>
+            </a>
+            <a href="{{ url_for('comprador.ver_carrito') }}" class="{% if page=='carrito' %}activo{% endif %}">
+                <span>Carrito</span>
+            </a>
+            <a href="{{ url_for('comprador.chats') }}" class="{% if page=='chats' %}activo{% endif %}">
+                <span>Chats</span>
+            </a>
+            <a href="{{ url_for('auth.perfil') }}" class="{% if page=='perfil' %}activo{% endif %}">
+                <span>Mi Perfil</span>
+            </a>
+            <a href="{{ url_for('auth.logout') }}">
+                <span>Cerrar Sesión</span>
+            </a>
         </div>
     </nav>
+    
+    <!-- ===== Sidebar para móviles ===== -->
+    <aside class="sidebar-menu" id="sidebar-menu">
+        <!-- Header con foto de perfil y nombre -->
+        <div class="sidebar-header-profile">
+            <div class="sidebar-profile-avatar" id="sidebar-profile-avatar">
+                <img id="sidebar-profile-avatar-img" src="" alt="Foto de perfil" style="display: none;">
+                <i class="fas fa-user-circle" id="sidebar-profile-avatar-icon"></i>
+            </div>
+            <div class="sidebar-profile-info">
+                <p class="sidebar-profile-name" id="sidebar-profile-name">{{ nombre }}</p>
+                <p class="sidebar-profile-email" id="sidebar-profile-email">{{ session.get('email', '') }}</p>
+            </div>
+        </div>
+        <div class="menu">
+            <a href="{{ url_for('comprador.panel_comprador') }}" class="{% if page=='inicio' %}activo{% endif %}">
+                <span>Inicio</span>
+            </a>
+            <a href="{{ url_for('comprador.ver_productos') }}" class="{% if page=='productos' %}activo{% endif %}">
+                <span>Productos</span>
+            </a>
+            <a href="{{ url_for('comprador.ver_carrito') }}" class="{% if page=='carrito' %}activo{% endif %}">
+                <span>Carrito</span>
+            </a>
+            <a href="{{ url_for('comprador.chats') }}" class="{% if page=='chats' %}activo{% endif %}">
+                <span>Chats</span>
+            </a>
+            <a href="{{ url_for('auth.perfil') }}" class="{% if page=='perfil' %}activo{% endif %}">
+                <span>Mi Perfil</span>
+            </a>
+            <a href="{{ url_for('auth.logout') }}">
+                <span>Cerrar Sesión</span>
+            </a>
+        </div>
+    </aside>
 
     <main class="chat-main">
         <div class="chat-header">
             <div>
-                <h1><i class="fas fa-comments"></i> Conversaciones</h1>
-                <p>Consulta tus mensajes con vendedores y continúa la conversación.</p>
+                <h1>Conversaciones</h1>
             </div>
-            <a href="/comprador/chats/nuevo" class="btn-nuevo-chat">
-                <i class="fas fa-plus"></i>
-                Nuevo mensaje
-            </a>
         </div>
 
         <div class="chat-layout layout-centered">
