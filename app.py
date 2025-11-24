@@ -1,6 +1,7 @@
 # Aplicación principal de AgroMarket
 # Usa Firebase Firestore como base de datos
 
+import os
 from flask import Flask, render_template
 from flask_mail import Mail
 from config.app import config
@@ -20,8 +21,19 @@ def create_app(config_name='development'):
     """Factory para crear la aplicación Flask"""
     app = Flask(__name__)
     
+    # Detectar si estamos en producción (Railway, Heroku, etc.)
+    # Railway usa la variable de entorno RAILWAY_ENVIRONMENT
+    if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('DYNO') or os.environ.get('PRODUCTION'):
+        config_name = 'production'
+    
     # Configuración
     app.config.from_object(config[config_name])
+    
+    # Configurar sesiones permanentes
+    @app.before_request
+    def make_session_permanent():
+        from flask import session
+        session.permanent = True
     
     # Inicializar Flask-Mail
     mail.init_app(app)
@@ -54,7 +66,6 @@ app = create_app()
 # EJECUTAR LA APP
 # ---------------------------
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 5001))
     debug = os.environ.get("FLASK_DEBUG", "0") == "1"
     app.run(debug=debug, host="0.0.0.0", port=port)

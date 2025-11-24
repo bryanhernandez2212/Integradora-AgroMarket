@@ -14,6 +14,12 @@ class Config:
     HOST = "127.0.0.1"
     PORT = 5000
     
+    # Configuración de sesiones
+    SESSION_COOKIE_SECURE = False  # En desarrollo, False. En producción con HTTPS, True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    PERMANENT_SESSION_LIFETIME = 86400  # 24 horas
+    
     # Configuración de Stripe
     STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY') or 'pk_test_51S4nWTKFtQrWkPCD3FRrULpKifZ43LK9m3RcNn9TFpbzYqNU36uInxGyKRuuV78HtuC5drNe0qeZWei34yKGiYeF00M9L6swJq'
     STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY') or 'sk_test_51S4nWTKFtQrWkPCDrCpPfYlsfL8ypkkhPfUlhMucmh1tS1afbn5QBZG4kNPI3bAyZpp8hKMS9rzRPkWGN06i0uwB00FEGEsbBX'
@@ -47,6 +53,12 @@ class ProductionConfig(Config):
     SECRET_KEY = os.environ.get('SECRET_KEY') or "clave_super_secreta_produccion"
     HOST = os.environ.get('HOST') or '0.0.0.0'
     PORT = int(os.environ.get('PORT') or 5000)
+    
+    # Configuración de sesiones para producción (HTTPS)
+    SESSION_COOKIE_SECURE = True  # Requiere HTTPS
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    PERMANENT_SESSION_LIFETIME = 86400  # 24 horas
 
 # Configuración por defecto
 config = {
