@@ -2178,6 +2178,59 @@ input:checked + .slider:before {
     gap: 10px;
 }
 
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #666;
+    cursor: pointer;
+    padding: 5px 10px;
+    transition: color 0.3s;
+}
+
+.modal-close:hover {
+    color: #333;
+}
+
+.modal-content .input-group {
+    margin-bottom: 1.5rem;
+}
+
+.modal-content .input-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    font-size: 0.95rem;
+}
+
+.modal-content .input-group input[type="text"],
+.modal-content .input-group input[type="file"] {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    transition: border-color 0.3s;
+}
+
+.modal-content .input-group input[type="text"]:focus,
+.modal-content .input-group input[type="file"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.modal-content .input-group small {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.modal-content .input-group small i {
+    margin-right: 0.25rem;
+}
+
 /* Responsive para modal */
 @media (max-width: 480px) {
     .modal-content {

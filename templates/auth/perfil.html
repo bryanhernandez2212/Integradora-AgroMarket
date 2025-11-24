@@ -1311,7 +1311,57 @@
                 rol = String(rol).toLowerCase().trim();
                 
                 if (activar) {
-                    // Agregar rol si no existe
+                    // Si es vendedor, validar campos antes de activar
+                    if (rol === 'vendedor' && !roles.includes(rol)) {
+                        // Verificar si ya tiene una solicitud pendiente
+                        const solicitudDoc = await db.collection('solicitudes_vendedores').doc(currentUser.uid).get();
+                        if (solicitudDoc.exists) {
+                            const solicitudData = solicitudDoc.data();
+                            const estado = solicitudData.estado || 'pendiente';
+                            
+                            if (estado === 'pendiente') {
+                                showMessage('Ya tienes una solicitud de vendedor pendiente de aprobación', 'info');
+                                // Revertir el switch
+                                const switchElement = document.getElementById(`switch-${rol}`);
+                                if (switchElement) switchElement.checked = false;
+                                return;
+                            } else if (estado === 'rechazada') {
+                                showMessage('Tu solicitud de vendedor fue rechazada. Puedes crear una nueva solicitud.', 'warning');
+                                // Mostrar modal para nueva solicitud
+                                await mostrarModalSolicitudVendedor();
+                                // Revertir el switch
+                                const switchElement = document.getElementById(`switch-${rol}`);
+                                if (switchElement) switchElement.checked = false;
+                                return;
+                            }
+                        }
+                        
+                        // Verificar si tiene los campos necesarios
+                        const tieneNombreTienda = userData.nombre_tienda && userData.nombre_tienda.trim() !== '';
+                        const tieneUbicacion = userData.ubicacion && userData.ubicacion.trim() !== '';
+                        const tieneDocumento = userData.documento_verificacion_url || (solicitudDoc.exists && solicitudDoc.data().documento_url);
+                        
+                        // Si faltan campos, mostrar modal para completarlos
+                        if (!tieneNombreTienda || !tieneUbicacion || !tieneDocumento) {
+                            await mostrarModalSolicitudVendedor();
+                            // Revertir el switch
+                            const switchElement = document.getElementById(`switch-${rol}`);
+                            if (switchElement) switchElement.checked = false;
+                            return;
+                        }
+                        
+                        // Si tiene todos los campos pero no tiene solicitud, crear una
+                        if (!solicitudDoc.exists) {
+                            await crearSolicitudVendedor(userData);
+                            showMessage('Solicitud de vendedor enviada. Un administrador la revisará.', 'success');
+                            // Revertir el switch
+                            const switchElement = document.getElementById(`switch-${rol}`);
+                            if (switchElement) switchElement.checked = false;
+                            return;
+                        }
+                    }
+                    
+                    // Agregar rol si no existe (flujo normal para otros roles o vendedor ya aprobado)
                     if (!roles.includes(rol)) {
                         showMessage(`Activando rol ${rol}...`, 'info');
                         
@@ -1334,14 +1384,6 @@
                         }
                         
                         showMessage(`Rol ${rol} activado exitosamente`, 'success');
-
-                    if (rol === 'vendedor') {
-                        try {
-                            await iniciarStripeConnectOnboarding();
-                        } catch (onboardingError) {
-                            console.warn('⚠️ No se pudo iniciar onboarding automático:', onboardingError);
-                        }
-                    }
 
                         // Sincronizar con la sesión de Flask para que el backend aplique los cambios de inmediato
                         try {
@@ -1425,6 +1467,264 @@
                 // Revertir el switch en caso de error
                 document.getElementById(`switch-${rol}`).checked = !activar;
             }
+        }
+
+        // Mostrar modal para completar datos de vendedor
+        async function mostrarModalSolicitudVendedor() {
+            return new Promise((resolve) => {
+                // Crear modal
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay';
+                modal.id = 'modal-solicitud-vendedor';
+                modal.innerHTML = `
+                    <div class="modal-content" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+                        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 20px;">
+                            <h2 style="margin: 0; color: var(--text-dark); display: flex; align-items: center; gap: 10px;"><i class="fas fa-store"></i> Solicitud de Rol de Vendedor</h2>
+                            <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <p style="margin-bottom: 1.5rem; color: #666;">
+                                Para activar el rol de vendedor, necesitamos algunos datos adicionales. 
+                                Un administrador revisará tu solicitud y te notificará cuando sea aprobada.
+                            </p>
+                            <form id="form-solicitud-vendedor">
+                                <!-- Nombre de la tienda -->
+                                <div class="input-group" style="margin-bottom: 1.5rem;">
+                                    <label for="modal-nombre_tienda">
+                                        <i class="fas fa-store"></i> Nombre de tu tienda o negocio <span style="color: red;">*</span>
+                                    </label>
+                                    <input type="text" 
+                                           id="modal-nombre_tienda" 
+                                           name="nombre_tienda" 
+                                           placeholder="Ej: La Granja de Juan" 
+                                           maxlength="100"
+                                           required
+                                           value="${userData?.nombre_tienda || ''}">
+                                    <small>
+                                        Nombre con el que aparecerás como vendedor
+                                    </small>
+                                </div>
+
+                                <!-- Ubicación con Google Maps Autocomplete -->
+                                <div class="input-group" style="margin-bottom: 1.5rem;">
+                                    <label for="modal-ubicacion">
+                                        <i class="fas fa-map-marker-alt"></i> Ubicación <span style="color: red;">*</span>
+                                    </label>
+                                    <input type="text" 
+                                           id="modal-ubicacion" 
+                                           name="ubicacion" 
+                                           placeholder="Empieza a escribir tu dirección..." 
+                                           maxlength="200" 
+                                           autocomplete="off"
+                                           required
+                                           value="${userData?.ubicacion || ''}">
+                                    <small>
+                                        ¿Dónde vendes tus productos? (Autocompletado con Google Maps)
+                                    </small>
+                                    <input type="hidden" id="modal-ubicacion_lat" name="ubicacion_lat" value="${userData?.ubicacion_lat || ''}">
+                                    <input type="hidden" id="modal-ubicacion_lng" name="ubicacion_lng" value="${userData?.ubicacion_lng || ''}">
+                                    <input type="hidden" id="modal-ubicacion_formatted" name="ubicacion_formatted" value="${userData?.ubicacion_formatted || ''}">
+                                </div>
+
+                                <!-- Documento de verificación -->
+                                <div class="input-group" style="margin-bottom: 1.5rem;">
+                                    <label for="modal-documento_verificacion">
+                                        <i class="fas fa-file-upload"></i> Documento de Verificación <span style="color: red;">*</span>
+                                    </label>
+                                    <input type="file" 
+                                           id="modal-documento_verificacion" 
+                                           name="documento_verificacion" 
+                                           accept="image/*,.pdf" 
+                                           required>
+                                    <small>
+                                        <i class="fas fa-info-circle"></i> 
+                                        Sube una identificación oficial, RFC o comprobante de domicilio (JPG, PNG, PDF - máx. 5MB)
+                                    </small>
+                                    <div id="modal-documento-preview" style="display: none; margin-top: 10px;">
+                                        <img id="modal-documento-preview-img" src="" alt="Vista previa" style="max-width: 200px; max-height: 200px; border-radius: 8px; border: 2px solid #2ba656;">
+                                        <p id="modal-documento-preview-nombre" style="margin-top: 5px; font-size: 0.9rem; color: #2ba656;"></p>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn-secondary" onclick="this.closest('.modal-overlay').remove(); resolve();">
+                                Cancelar
+                            </button>
+                            <button type="button" class="btn-primary" id="btn-enviar-solicitud">
+                                <i class="fas fa-paper-plane"></i> Enviar Solicitud
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(modal);
+                
+                // Inicializar Google Places Autocomplete
+                if (typeof google !== 'undefined' && google.maps && google.maps.places) {
+                    const ubicacionInput = document.getElementById('modal-ubicacion');
+                    if (ubicacionInput) {
+                        const autocomplete = new google.maps.places.Autocomplete(ubicacionInput, {
+                            componentRestrictions: { country: 'mx' },
+                            fields: ['formatted_address', 'geometry', 'name'],
+                            types: ['establishment', 'geocode']
+                        });
+
+                        autocomplete.addListener('place_changed', function() {
+                            const place = autocomplete.getPlace();
+                            if (!place.geometry) {
+                                console.log('No se encontró información del lugar');
+                                return;
+                            }
+
+                            document.getElementById('modal-ubicacion_formatted').value = place.formatted_address || '';
+                            document.getElementById('modal-ubicacion_lat').value = place.geometry.location.lat();
+                            document.getElementById('modal-ubicacion_lng').value = place.geometry.location.lng();
+                        });
+                    }
+                }
+                
+                // Preview del documento
+                const documentoInput = document.getElementById('modal-documento_verificacion');
+                const previewDiv = document.getElementById('modal-documento-preview');
+                const previewImg = document.getElementById('modal-documento-preview-img');
+                const previewNombre = document.getElementById('modal-documento-preview-nombre');
+                
+                documentoInput.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        if (file.size > 5 * 1024 * 1024) {
+                            alert('El documento no debe exceder 5MB');
+                            e.target.value = '';
+                            return;
+                        }
+                        
+                        if (file.type.startsWith('image/')) {
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                previewImg.src = e.target.result;
+                                previewNombre.textContent = file.name;
+                                previewDiv.style.display = 'block';
+                            };
+                            reader.readAsDataURL(file);
+                        } else {
+                            previewImg.style.display = 'none';
+                            previewNombre.textContent = file.name;
+                            previewDiv.style.display = 'block';
+                        }
+                    } else {
+                        previewDiv.style.display = 'none';
+                    }
+                });
+                
+                // Enviar solicitud
+                const btnEnviar = document.getElementById('btn-enviar-solicitud');
+                btnEnviar.addEventListener('click', async () => {
+                    const form = document.getElementById('form-solicitud-vendedor');
+                    if (!form.checkValidity()) {
+                        form.reportValidity();
+                        return;
+                    }
+                    
+                    btnEnviar.disabled = true;
+                    btnEnviar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+                    
+                    try {
+                        const nombreTienda = document.getElementById('modal-nombre_tienda').value.trim();
+                        const ubicacion = document.getElementById('modal-ubicacion').value.trim();
+                        const ubicacionLat = document.getElementById('modal-ubicacion_lat').value;
+                        const ubicacionLng = document.getElementById('modal-ubicacion_lng').value;
+                        const ubicacionFormatted = document.getElementById('modal-ubicacion_formatted').value;
+                        const documentoFile = document.getElementById('modal-documento_verificacion').files[0];
+                        
+                        if (!documentoFile) {
+                            alert('Por favor, sube un documento de verificación');
+                            btnEnviar.disabled = false;
+                            btnEnviar.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Solicitud';
+                            return;
+                        }
+                        
+                        // Subir documento a Firebase Storage
+                        const storage = firebase.storage();
+                        const documentoRef = storage.ref(`solicitudes_vendedores/${currentUser.uid}/${Date.now()}_${documentoFile.name}`);
+                        await documentoRef.put(documentoFile);
+                        const documentoUrl = await documentoRef.getDownloadURL();
+                        
+                        // Crear solicitud
+                        await crearSolicitudVendedor({
+                            nombre_tienda: nombreTienda,
+                            ubicacion: ubicacion,
+                            ubicacion_lat: ubicacionLat ? parseFloat(ubicacionLat) : null,
+                            ubicacion_lng: ubicacionLng ? parseFloat(ubicacionLng) : null,
+                            ubicacion_formatted: ubicacionFormatted || ubicacion,
+                            documento_url: documentoUrl
+                        });
+                        
+                        showMessage('✅ Solicitud de vendedor enviada correctamente. Un administrador la revisará.', 'success');
+                        modal.remove();
+                        resolve();
+                        
+                        // Recargar datos del usuario
+                        await loadUserData();
+                    } catch (error) {
+                        console.error('❌ Error enviando solicitud:', error);
+                        alert('Error al enviar la solicitud: ' + error.message);
+                        btnEnviar.disabled = false;
+                        btnEnviar.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Solicitud';
+                    }
+                });
+                
+                // Cerrar al hacer clic fuera del modal
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        modal.remove();
+                        resolve();
+                    }
+                });
+            });
+        }
+
+        // Crear solicitud de vendedor en Firestore
+        async function crearSolicitudVendedor(datosAdicionales = {}) {
+            const solicitudData = {
+                user_id: currentUser.uid,
+                nombre: userData.nombre || currentUser.displayName || (currentUser.email || '').split('@')[0],
+                email: currentUser.email,
+                nombre_tienda: datosAdicionales.nombre_tienda || userData.nombre_tienda || '',
+                ubicacion: datosAdicionales.ubicacion || userData.ubicacion || '',
+                ubicacion_formatted: datosAdicionales.ubicacion_formatted || userData.ubicacion_formatted || datosAdicionales.ubicacion || userData.ubicacion || '',
+                ubicacion_lat: datosAdicionales.ubicacion_lat || userData.ubicacion_lat || null,
+                ubicacion_lng: datosAdicionales.ubicacion_lng || userData.ubicacion_lng || null,
+                documento_url: datosAdicionales.documento_url || userData.documento_verificacion_url || '',
+                estado: 'pendiente',
+                fecha_solicitud: firebase.firestore.FieldValue.serverTimestamp(),
+                revisado_por: null,
+                fecha_revision: null,
+                motivo_rechazo: null
+            };
+            
+            // Guardar solicitud en Firestore
+            await db.collection('solicitudes_vendedores').doc(currentUser.uid).set(solicitudData);
+            
+            // Actualizar datos del usuario con la información proporcionada (sin activar el rol aún)
+            const updateData = {
+                nombre_tienda: solicitudData.nombre_tienda,
+                ubicacion: solicitudData.ubicacion,
+                ubicacion_formatted: solicitudData.ubicacion_formatted,
+                ubicacion_lat: solicitudData.ubicacion_lat,
+                ubicacion_lng: solicitudData.ubicacion_lng,
+                solicitud_vendedor_pendiente: true,
+                fecha_actualizacion: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            
+            await db.collection('usuarios').doc(currentUser.uid).update(updateData);
+            
+            // Actualizar userData local
+            Object.assign(userData, updateData);
+            
+            console.log('✅ Solicitud de vendedor creada:', solicitudData);
         }
 
         // Cambiar rol activo
