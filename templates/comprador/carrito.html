@@ -1125,9 +1125,19 @@
                     
                     // Enviar correo en background (no bloquear la redirección)
                     if (compraId && user) {
+                        console.log('📧 Preparando envío de comprobante de compra...', { compraId, email: user.email });
                         const userDoc = await db.collection('usuarios').doc(user.uid).get();
                         const userData = userDoc.exists ? userDoc.data() : {};
-                        enviarCorreoEnBackground(compraId, user.email, userData, carritoItems, totalCarritoDin, 'tarjeta', direccionData);
+                        // Enviar correo sin esperar (fire and forget) pero con mejor manejo de errores
+                        enviarCorreoEnBackground(compraId, user.email, userData, carritoItems, totalCarritoDin, 'tarjeta', direccionData)
+                            .then(() => {
+                                console.log('✅ Comprobante de compra enviado exitosamente');
+                            })
+                            .catch(err => {
+                                console.error('❌ Error enviando correo (no crítico):', err);
+                            });
+                    } else {
+                        console.warn('⚠️ No se puede enviar correo: compraId o user no disponible', { compraId, user: !!user });
                     }
                     
                     // Redirigir inmediatamente a página de éxito
@@ -1203,11 +1213,21 @@
 
                 // Enviar correo en background (no bloquear la redirección)
                 if (compraId && user) {
+                    console.log('📧 Preparando envío de comprobante de compra...', { compraId, email: user.email, metodoPago });
                     const userDoc = await db.collection('usuarios').doc(user.uid).get();
                     const userData = userDoc.exists ? userDoc.data() : {};
-                    enviarCorreoEnBackground(compraId, user.email, userData, carritoItems, totalCarritoDin, metodoPago, direccionData);
+                    // Enviar correo sin esperar (fire and forget) pero con mejor manejo de errores
+                    enviarCorreoEnBackground(compraId, user.email, userData, carritoItems, totalCarritoDin, metodoPago, direccionData)
+                        .then(() => {
+                            console.log('✅ Comprobante de compra enviado exitosamente');
+                        })
+                        .catch(err => {
+                            console.error('❌ Error enviando correo (no crítico):', err);
+                        });
+                } else {
+                    console.warn('⚠️ No se puede enviar correo: compraId o user no disponible', { compraId, user: !!user });
                 }
-
+                
                 // Redirigir inmediatamente a página de éxito
                 window.location.href = '/comprador/pago_exitoso';
             } catch (error) {
@@ -1270,6 +1290,13 @@
                     };
                 }));
 
+                // Obtener lista única de vendedores para las reglas de Firestore
+                const vendedoresIds = [...new Set(productosConVendedor
+                    .map(p => p.vendedor_id)
+                    .filter(id => id && id.trim() !== ''))];
+                
+                console.log('👥 Vendedores únicos en la compra:', vendedoresIds);
+                
                 // Preparar datos de la compra
                 const compraData = {
                     usuario_id: user.uid,
@@ -1279,6 +1306,7 @@
                         ...p,
                         estado_pedido: 'preparando' // Estado por defecto
                     })),
+                    vendedores_ids: vendedoresIds, // Array de IDs de vendedores para las reglas de Firestore
                     subtotal: carritoItems.reduce((acc, it) => acc + (Number(it.precio) * Number(it.cantidad)), 0),
                     envio: 4.50,
                     impuestos: carritoItems.reduce((acc, it) => acc + (Number(it.precio) * Number(it.cantidad)), 0) * 0.1,
@@ -1470,62 +1498,90 @@
 
         // Función para enviar correo en background (no bloquea)
         async function enviarCorreoEnBackground(compraId, emailCliente, userData, productos, total, metodoPago, direccionData) {
-            // Ejecutar en background sin bloquear
-            setTimeout(async () => {
-                try {
-                    const fechaCompra = new Date().toLocaleString('es-MX', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
-                    
-                    // Preparar productos para el correo
-                    const productosParaCorreo = productos.map(p => ({
-                        nombre: p.nombre || p.producto_nombre,
-                        cantidad: p.cantidad,
-                        unidad: p.unidad,
-                        precio_unitario: p.precio || p.precio_unitario,
-                        precio_total: (p.precio || p.precio_unitario) * (p.cantidad || 1)
-                    }));
-                    
-                    const subtotal = productos.reduce((acc, p) => acc + ((p.precio || p.precio_unitario) * (p.cantidad || 1)), 0);
-                    const impuestos = subtotal * 0.1;
-                    const envio = 4.50;
-                    
-                    const ticketData = {
-                        compra_id: compraId,
-                        email_cliente: emailCliente,
-                        nombre_cliente: userData.nombre || userData.displayName || 'Cliente',
-                        fecha_compra: fechaCompra,
-                        productos: productosParaCorreo,
-                        subtotal: subtotal,
-                        envio: envio,
-                        impuestos: impuestos,
-                        total: total,
-                        metodo_pago: metodoPago,
-                        direccion_entrega: direccionData || {}
-                    };
-                    
-                    const response = await fetch('/comprador/enviar-ticket-compra', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(ticketData),
-                        credentials: 'same-origin'
-                    });
-                    
-                    if (response.ok) {
-                        console.log('✅ Ticket de compra enviado por correo');
-                    } else {
-                        console.warn('⚠️ No se pudo enviar el ticket por correo');
-                    }
-                } catch (emailError) {
-                    console.error('❌ Error enviando ticket por correo:', emailError);
+            try {
+                console.log('📧 Iniciando envío de comprobante de compra...', { 
+                    compraId, 
+                    emailCliente,
+                    cantidadProductos: productos.length,
+                    total: total,
+                    metodoPago: metodoPago
+                });
+                
+                if (!compraId) {
+                    console.error('❌ No se proporcionó compraId');
+                    return;
                 }
-            }, 100); // Ejecutar después de 100ms para no bloquear
+                
+                if (!emailCliente) {
+                    console.error('❌ No se proporcionó email del cliente');
+                    return;
+                }
+                
+                const fechaCompra = new Date().toLocaleString('es-MX', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                
+                // Preparar productos para el correo
+                const productosParaCorreo = productos.map(p => ({
+                    nombre: p.nombre || p.producto_nombre || 'Producto',
+                    cantidad: p.cantidad || 0,
+                    unidad: p.unidad || 'kg',
+                    precio_unitario: p.precio || p.precio_unitario || 0,
+                    precio_total: (p.precio || p.precio_unitario || 0) * (p.cantidad || 1)
+                }));
+                
+                const subtotal = productos.reduce((acc, p) => acc + ((p.precio || p.precio_unitario || 0) * (p.cantidad || 1)), 0);
+                const impuestos = subtotal * 0.1;
+                const envio = 4.50;
+                
+                const ticketData = {
+                    compra_id: compraId,
+                    email_cliente: emailCliente,
+                    nombre_cliente: userData.nombre || userData.displayName || 'Cliente',
+                    fecha_compra: fechaCompra,
+                    productos: productosParaCorreo,
+                    subtotal: subtotal,
+                    envio: envio,
+                    impuestos: impuestos,
+                    total: total,
+                    metodo_pago: metodoPago,
+                    direccion_entrega: direccionData || {}
+                };
+                
+                console.log('📧 Datos del ticket a enviar:', {
+                    compra_id: ticketData.compra_id,
+                    email: ticketData.email_cliente,
+                    nombre: ticketData.nombre_cliente,
+                    productos: ticketData.productos.length,
+                    total: ticketData.total
+                });
+                
+                const response = await fetch('/comprador/enviar-ticket-compra', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(ticketData),
+                    credentials: 'same-origin'
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('✅ Ticket de compra enviado por correo exitosamente:', result);
+                    return result;
+                } else {
+                    const errorText = await response.text();
+                    console.error('⚠️ Error enviando ticket por correo:', response.status, errorText);
+                    throw new Error(`Error ${response.status}: ${errorText}`);
+                }
+            } catch (emailError) {
+                console.error('❌ Error enviando ticket por correo:', emailError);
+                throw emailError;
+            }
         }
 
         // Funciones de Google Maps removidas - ahora se usa formulario manual

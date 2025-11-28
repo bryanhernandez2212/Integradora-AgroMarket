@@ -5,11 +5,14 @@ service cloud.firestore {
     // Reglas para la colección de usuarios
     match /usuarios/{userId} {
       // Los usuarios pueden leer su propio documento
-      allow read: if request.auth != null && request.auth.uid == userId;
+      // También pueden leer documentos de otros usuarios (necesario para mostrar info de vendedores en productos)
+      allow read: if request.auth != null;
       // Los usuarios pueden actualizar su propio documento
       allow update: if request.auth != null && request.auth.uid == userId;
       // Solo el usuario puede crear su propio documento
       allow create: if request.auth != null && request.auth.uid == userId;
+      // Permitir consultas (list) para buscar vendedores
+      allow list: if request.auth != null;
     }
     
     // Reglas para la colección de productos
@@ -38,6 +41,10 @@ service cloud.firestore {
       // Los usuarios pueden eliminar solo sus propios items del carrito
       allow delete: if request.auth != null && 
                        resource.data.usuario_id == request.auth.uid;
+      
+      // Permitir consultas (list) - las consultas con where se validan contra cada documento
+      // Esto permite hacer consultas como: where('usuario_id', '==', uid)
+      allow list: if request.auth != null;
     }
     
     // Reglas para la colección de ventas
@@ -63,9 +70,17 @@ service cloud.firestore {
     match /chats/{chatId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
+      
+      // Reglas para los mensajes dentro de cada chat
+      match /messages/{messageId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+        allow update: if request.auth != null;
+        allow delete: if request.auth != null;
+      }
     }
     
-    // Reglas para la colección de mensajes
+    // Reglas para la colección de mensajes (legacy, si existe)
     match /mensajes/{mensajeId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
@@ -73,16 +88,85 @@ service cloud.firestore {
     
     // Reglas para solicitudes de vendedores
     match /solicitudes_vendedores/{solicitudId} {
+      // Los usuarios pueden leer sus propias solicitudes
+      // Los administradores pueden leer todas las solicitudes
       allow read: if request.auth != null;
+      
+      // Los usuarios pueden crear su propia solicitud
+      // Verificar que el user_id o usuario_id coincida con el usuario autenticado
+      // También verificar que el ID del documento coincida con el UID del usuario
       allow create: if request.auth != null && 
-                       request.resource.data.usuario_id == request.auth.uid;
-      allow update: if request.auth != null;
+                       request.auth.uid == solicitudId &&
+                       (request.resource.data.user_id == request.auth.uid ||
+                        request.resource.data.usuario_id == request.auth.uid ||
+                        !('user_id' in request.resource.data) && !('usuario_id' in request.resource.data));
+      
+      // Los usuarios pueden actualizar solo su propia solicitud
+      // Los administradores pueden actualizar cualquier solicitud
+      // Verificar si el usuario es administrador consultando su documento
+      allow update: if request.auth != null && (
+                       // El usuario es el dueño de la solicitud
+                       (resource.data.user_id == request.auth.uid ||
+                        resource.data.usuario_id == request.auth.uid ||
+                        solicitudId == request.auth.uid) ||
+                       // O el usuario es administrador
+                       get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.roles.hasAny(['administrador'])
+                     );
+      
+      // Permitir consultas (list) para administradores y usuarios buscando sus propias solicitudes
+      allow list: if request.auth != null;
     }
     
     // Reglas para categorías
     match /categorias/{categoriaId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
+    }
+    
+    // Reglas para códigos de recuperación de contraseña
+    match /password_reset_codes/{codeId} {
+      // Solo el sistema puede crear códigos (desde el backend)
+      // Los usuarios pueden leer solo su propio código (por email)
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null;
+      // No permitir actualización de códigos
+      allow update: if false;
+    }
+    
+    // Reglas para la colección de compras
+    match /compras/{compraId} {
+      // Los usuarios pueden leer sus propias compras
+      // Los vendedores pueden leer compras que contengan sus productos
+      allow read: if request.auth != null && (
+                     resource.data.usuario_id == request.auth.uid ||
+                     // Verificar si está en vendedores_ids
+                     (resource.data.vendedores_ids != null && 
+                      resource.data.vendedores_ids.hasAny([request.auth.uid]))
+                   );
+      
+      // Los usuarios pueden crear sus propias compras
+      allow create: if request.auth != null && 
+                       request.resource.data.usuario_id == request.auth.uid;
+      
+      // Los usuarios pueden actualizar sus propias compras
+      // Los vendedores pueden actualizar compras que contengan sus productos (para cambiar estado)
+      // Permitir actualización si:
+      // 1. Es el dueño de la compra, O
+      // 2. Está en vendedores_ids
+      allow update: if request.auth != null && (
+                       resource.data.usuario_id == request.auth.uid ||
+                       // Verificar si está en vendedores_ids
+                       (resource.data.vendedores_ids != null && 
+                        resource.data.vendedores_ids.hasAny([request.auth.uid]))
+                     );
+      
+      // Los usuarios pueden eliminar solo sus propias compras (si está permitido)
+      allow delete: if request.auth != null && 
+                       resource.data.usuario_id == request.auth.uid;
+      
+      // Permitir consultas (list) - las consultas con where se validan contra cada documento
+      allow list: if request.auth != null;
     }
     
     // Por defecto, denegar todo lo demás

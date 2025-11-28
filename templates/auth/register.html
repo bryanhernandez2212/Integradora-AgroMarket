@@ -153,6 +153,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-functions.js"></script>
     <script src="/static/js/firebase-config.js"></script>
 
     <script>
@@ -423,6 +424,21 @@
                         await db.collection('solicitudes_vendedores').doc(user.uid).set(solicitudData);
                         console.log('✅ Solicitud de vendedor guardada en solicitudes_vendedores');
 
+                        // Enviar correo de notificación al administrador
+                        console.log('📧 [REGISTRO] Iniciando proceso de notificación al administrador...');
+                        try {
+                            await notificarAdministradorNuevaSolicitud(solicitudData, user.uid);
+                            console.log('✅ [REGISTRO] Proceso de notificación completado');
+                        } catch (emailError) {
+                            console.error('❌ [REGISTRO] Error enviando notificación al administrador:', emailError);
+                            console.error('❌ [REGISTRO] Detalles del error:', {
+                                message: emailError.message,
+                                code: emailError.code,
+                                stack: emailError.stack
+                            });
+                            // No bloquear el registro si falla el correo
+                        }
+
                         // IMPORTANTE: Cerrar sesión y regresar al login (no permitir acceso aún)
                         alert('✅ Tu solicitud de vendedor fue enviada. Un administrador la revisará. Recibirás una notificación cuando sea aprobada.');
                         try { await auth.signOut(); } catch(e) { console.warn(e); }
@@ -492,6 +508,83 @@
                     }
                 }
             });
+        }
+        
+        // Notificar al administrador sobre nueva solicitud de vendedor
+        async function notificarAdministradorNuevaSolicitud(solicitudData, solicitudId) {
+            console.log('🔍 [REGISTRO-NOTIFICACIÓN] Iniciando función notificarAdministradorNuevaSolicitud');
+            console.log('🔍 [REGISTRO-NOTIFICACIÓN] Datos de solicitud:', solicitudData);
+            console.log('🔍 [REGISTRO-NOTIFICACIÓN] Solicitud ID:', solicitudId);
+            
+            try {
+                // Verificar si Firebase Functions está disponible
+                console.log('🔍 [REGISTRO-NOTIFICACIÓN] Verificando Firebase Functions...');
+                if (typeof firebase === 'undefined') {
+                    console.error('❌ [REGISTRO-NOTIFICACIÓN] Firebase no está definido');
+                    return;
+                }
+                
+                if (!firebase.functions) {
+                    console.error('❌ [REGISTRO-NOTIFICACIÓN] firebase.functions no está disponible');
+                    console.log('🔍 [REGISTRO-NOTIFICACIÓN] firebase disponible:', typeof firebase !== 'undefined');
+                    console.log('🔍 [REGISTRO-NOTIFICACIÓN] firebase.functions disponible:', typeof firebase.functions !== 'undefined');
+                    return;
+                }
+                
+                console.log('✅ [REGISTRO-NOTIFICACIÓN] Firebase Functions está disponible');
+                const functions = firebase.functions();
+                console.log('✅ [REGISTRO-NOTIFICACIÓN] Functions inicializado:', functions);
+                
+                // Obtener fecha de solicitud formateada
+                const fechaSolicitud = solicitudData.fecha_solicitud 
+                    ? (solicitudData.fecha_solicitud.toDate ? solicitudData.fecha_solicitud.toDate().toLocaleString('es-MX') : new Date().toLocaleString('es-MX'))
+                    : new Date().toLocaleString('es-MX');
+                
+                console.log('📧 [REGISTRO-NOTIFICACIÓN] Preparando datos para enviar:', {
+                    solicitudId: solicitudId,
+                    nombre: solicitudData.nombre,
+                    email: solicitudData.email,
+                    nombreTienda: solicitudData.nombre_tienda,
+                    ubicacion: solicitudData.ubicacion || solicitudData.ubicacion_formatted,
+                    fechaSolicitud: fechaSolicitud
+                });
+                
+                // Llamar a la Firebase Function
+                console.log('📞 [REGISTRO-NOTIFICACIÓN] Llamando a Firebase Function: sendNewSellerApplicationNotification');
+                const sendNewSellerApplicationNotification = functions.httpsCallable('sendNewSellerApplicationNotification');
+                
+                console.log('⏳ [REGISTRO-NOTIFICACIÓN] Esperando respuesta de Firebase Function...');
+                const result = await sendNewSellerApplicationNotification({
+                    solicitudId: solicitudId,
+                    nombre: solicitudData.nombre,
+                    email: solicitudData.email,
+                    nombreTienda: solicitudData.nombre_tienda,
+                    ubicacion: solicitudData.ubicacion || solicitudData.ubicacion_formatted,
+                    fechaSolicitud: fechaSolicitud
+                });
+                
+                console.log('📥 [REGISTRO-NOTIFICACIÓN] Respuesta recibida de Firebase Function:', result);
+                
+                if (result && result.data && result.data.success) {
+                    console.log('✅ [REGISTRO-NOTIFICACIÓN] Notificación enviada exitosamente a administradores:', {
+                        adminsNotified: result.data.adminsNotified,
+                        adminEmails: result.data.adminEmails,
+                        messageId: result.data.messageId
+                    });
+                } else {
+                    console.warn('⚠️ [REGISTRO-NOTIFICACIÓN] Respuesta inesperada de Firebase Function:', result);
+                    if (result && result.data) {
+                        console.warn('⚠️ [REGISTRO-NOTIFICACIÓN] Mensaje de error:', result.data.message);
+                    }
+                }
+            } catch (error) {
+                console.error('❌ [REGISTRO-NOTIFICACIÓN] Error completo:', error);
+                console.error('❌ [REGISTRO-NOTIFICACIÓN] Tipo de error:', error.constructor.name);
+                console.error('❌ [REGISTRO-NOTIFICACIÓN] Mensaje:', error.message);
+                console.error('❌ [REGISTRO-NOTIFICACIÓN] Código:', error.code);
+                console.error('❌ [REGISTRO-NOTIFICACIÓN] Stack:', error.stack);
+                // No lanzar el error, solo loguearlo
+            }
         }
 
         // Efecto hover en el select de rol y mostrar/ocultar campos de vendedor

@@ -72,15 +72,35 @@
             throw new Error("Firebase SDK no está disponible en la página de chat.");
         }
 
+        // Intentar usar la función de inicialización global si existe
+        if (typeof window.inicializarFirebase === "function") {
+            try {
+                await window.inicializarFirebase();
+            } catch (e) {
+                // Si ya está inicializado, continuar
+                if (!e.message || !e.message.includes('already exists')) {
+                    console.warn('Error en inicializarFirebase global:', e);
+                }
+            }
+        }
+
+        // Verificar si Firebase ya está inicializado
         if (firebase.apps.length === 0) {
-            if (!window.firebaseConfig) {
+            // Si no está inicializado, inicializarlo directamente
+            if (window.firebaseConfig) {
+                firebase.initializeApp(window.firebaseConfig);
+            } else {
                 throw new Error("No se encontró la configuración de Firebase.");
             }
-            firebase.initializeApp(window.firebaseConfig);
         }
 
         auth = firebase.auth();
         db = firebase.firestore();
+
+        // Verificar que auth y db estén disponibles
+        if (!auth || !db) {
+            throw new Error('No se pudieron obtener auth o db de Firebase');
+        }
 
         db.settings({
             cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
@@ -215,9 +235,58 @@
 
             actualizarCabeceraChat(data);
         } else {
+            // Si no hay chat existente, intentar obtener el partnerId de otras fuentes
             if (!partnerId) {
-                mostrarError("No se pudo iniciar el chat porque falta el participante.");
-                chatSendBtn.disabled = true;
+                console.warn('⚠️ No se encontró partnerId, intentando obtenerlo de otras fuentes...');
+                
+                // Intentar obtener el partnerId desde la URL o parámetros
+                const urlParams = new URLSearchParams(window.location.search);
+                const vendedorIdFromUrl = urlParams.get('vendedor_id') || urlParams.get('vendedorId');
+                const compradorIdFromUrl = urlParams.get('comprador_id') || urlParams.get('compradorId');
+                
+                if (chatRole === "comprador" && vendedorIdFromUrl) {
+                    partnerId = vendedorIdFromUrl;
+                    console.log('✅ partnerId obtenido de URL (vendedor_id):', partnerId);
+                } else if (chatRole === "vendedor" && compradorIdFromUrl) {
+                    partnerId = compradorIdFromUrl;
+                    console.log('✅ partnerId obtenido de URL (comprador_id):', partnerId);
+                }
+                
+                // Si aún no hay partnerId, intentar obtenerlo desde los productos del pedido
+                if (!partnerId && pedidoId && pedidoId !== "pedido") {
+                    try {
+                        const compraDoc = await db.collection('compras').doc(pedidoId).get();
+                        if (compraDoc.exists) {
+                            const compraData = compraDoc.data();
+                            const productos = compraData.productos || [];
+                            if (productos.length > 0 && productos[0].vendedor_id) {
+                                partnerId = productos[0].vendedor_id;
+                                partnerName = productos[0].vendedor_nombre || 'Vendedor';
+                                console.log('✅ partnerId obtenido del pedido:', partnerId);
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('⚠️ Error obteniendo partnerId del pedido:', error);
+                    }
+                }
+            }
+            
+            if (!partnerId) {
+                console.error('❌ No se pudo obtener partnerId de ninguna fuente');
+                // En lugar de mostrar error en el área de mensajes, mostrar un mensaje más discreto
+                // y redirigir o mostrar un estado vacío
+                if (chatMessagesEl) {
+                    chatMessagesEl.innerHTML = `
+                        <div class="chat-empty-messages">
+                            <i class="fas fa-info-circle"></i>
+                            <p>No se pudo cargar la información del chat.</p>
+                            <p style="font-size: 0.9rem; color: #999; margin-top: 0.5rem;">
+                                Por favor, intenta acceder al chat desde el pedido correspondiente.
+                            </p>
+                        </div>
+                    `;
+                }
+                if (chatSendBtn) chatSendBtn.disabled = true;
                 return;
             }
 
@@ -274,8 +343,10 @@
             actualizarCabeceraChat(payload);
         }
 
+        console.log('📡 Estableciendo suscripciones...');
         suscribirseAChatMetadata();
         suscribirseAMensajes();
+        console.log('✅ Suscripciones establecidas');
         
         // Marcar mensajes como leídos al abrir el chat
         // Esperar un momento para que las suscripciones se establezcan
@@ -474,11 +545,24 @@
         }
 
         try {
+            if (!chatRef) {
+                console.error('❌ chatRef no está disponible para suscribirse a mensajes');
+                mostrarError("Error: No se pudo establecer la conexión con el chat.");
+                return;
+            }
+            
             const mensajesRef = chatRef.collection("messages");
+            console.log('📡 Suscribiéndose a mensajes en:', mensajesRef.path);
 
             messagesUnsubscribe = mensajesRef.onSnapshot(
                 (snapshot) => {
-                    const mensajes = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+                    console.log('📨 Snapshot recibido, documentos:', snapshot.docs.length);
+                    const mensajes = snapshot.docs.map((doc) => {
+                        const data = doc.data();
+                        console.log('📝 Mensaje:', { id: doc.id, text: data.message || data.text, senderId: data.senderId || data.sender_id });
+                        return { id: doc.id, ...data };
+                    });
+                    console.log('📋 Total mensajes a renderizar:', mensajes.length);
                     renderizarMensajes(mensajes);
 
                     // Marcar como leído cuando se cargan los mensajes (solo si hay mensajes y es la primera carga)
@@ -546,13 +630,30 @@
     }
 
     function renderizarMensajes(mensajes) {
+        console.log('🎨 renderizarMensajes llamado con', mensajes.length, 'mensajes');
+        console.log('chatMessagesEl:', chatMessagesEl);
+        console.log('chatMessagesLoadingEl:', chatMessagesLoadingEl);
+        console.log('currentUser:', currentUser);
+        
         if (chatMessagesLoadingEl) {
             chatMessagesLoadingEl.style.display = "none";
         }
 
+        if (!chatMessagesEl) {
+            console.error('❌ chatMessagesEl no está disponible');
+            return;
+        }
+        
+        if (!currentUser || !currentUser.uid) {
+            console.error('❌ currentUser no está disponible');
+            return;
+        }
+
+        // Limpiar contenedor
         chatMessagesEl.innerHTML = "";
 
         if (!mensajes.length) {
+            console.log('⚠️ No hay mensajes para renderizar');
             const placeholder = document.createElement("div");
             placeholder.className = "chat-empty-messages";
             placeholder.innerHTML = `
@@ -566,6 +667,9 @@
             actualizarCacheUltimoMensaje(chatDocId, "");
             return;
         }
+        
+        console.log('✅ Renderizando', mensajes.length, 'mensajes');
+        console.log('Current User UID:', currentUser.uid);
 
         mensajes.sort((a, b) => obtenerFechaMensaje(a) - obtenerFechaMensaje(b));
 
@@ -590,7 +694,26 @@
                 mensaje.user_id ||
                 mensaje.userId ||
                 "";
+            
+            // Verificar que currentUser esté disponible
+            if (!currentUser || !currentUser.uid) {
+                console.error('❌ currentUser no está disponible al renderizar mensajes');
+                return;
+            }
+            
             const esPropio = senderIdMensaje === currentUser.uid;
+            console.log('👤 Mensaje:', {
+                senderId: senderIdMensaje,
+                currentUserId: currentUser.uid,
+                esPropio: esPropio,
+                texto: mensaje.message || mensaje.text || mensaje.texto,
+                comparacion: `${senderIdMensaje} === ${currentUser.uid} = ${esPropio}`
+            });
+            
+            // Si no se puede determinar, asumir que no es propio
+            if (!senderIdMensaje) {
+                console.warn('⚠️ Mensaje sin senderId, asumiendo que no es propio');
+            }
             const messageEl = document.createElement("div");
             messageEl.className = `chat-message ${esPropio ? "enviado" : "recibido"}`;
 
@@ -642,7 +765,35 @@
         });
 
         chatMessagesEl.appendChild(fragment);
-        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+        
+        // Forzar scroll al final después de renderizar - múltiples intentos para asegurar que funcione
+        const scrollToBottom = () => {
+            if (chatMessagesEl) {
+                const previousScroll = chatMessagesEl.scrollTop;
+                chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+                console.log('📜 Scroll:', {
+                    anterior: previousScroll,
+                    nuevo: chatMessagesEl.scrollTop,
+                    alturaTotal: chatMessagesEl.scrollHeight,
+                    alturaVisible: chatMessagesEl.clientHeight
+                });
+                
+                // Si el scroll no cambió, intentar con requestAnimationFrame
+                if (chatMessagesEl.scrollTop === previousScroll && chatMessagesEl.scrollHeight > chatMessagesEl.clientHeight) {
+                    requestAnimationFrame(() => {
+                        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+                    });
+                }
+            }
+        };
+        
+        // Scroll inmediato
+        scrollToBottom();
+        
+        // Scroll después de un pequeño delay
+        setTimeout(scrollToBottom, 50);
+        setTimeout(scrollToBottom, 200);
+        setTimeout(scrollToBottom, 500);
 
         const ultimoMensaje = mensajes[mensajes.length - 1] || {};
         const textoUltimoMensaje =
@@ -657,6 +808,8 @@
             chatListPreview.textContent = textoUltimoMensaje;
         }
         actualizarCacheUltimoMensaje(chatDocId, textoUltimoMensaje);
+        
+        console.log('✅ Mensajes renderizados correctamente');
     }
 
     function obtenerFechaMensaje(mensaje) {
@@ -706,22 +859,71 @@
     }
 
     function configurarEventos() {
-        chatSendBtn.addEventListener("click", enviarMensaje);
-        chatInputEl.addEventListener("keydown", (event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
+        console.log('🔧 Configurando eventos del chat...');
+        console.log('chatSendBtn:', chatSendBtn);
+        console.log('chatInputEl:', chatInputEl);
+        
+        if (!chatSendBtn || !chatInputEl) {
+            console.error('❌ No se encontraron los elementos del chat');
+            return;
+        }
+        
+        // Remover listeners anteriores si existen
+        const newSendBtn = chatSendBtn.cloneNode(true);
+        chatSendBtn.parentNode.replaceChild(newSendBtn, chatSendBtn);
+        const newInputEl = chatInputEl.cloneNode(true);
+        chatInputEl.parentNode.replaceChild(newInputEl, chatInputEl);
+        
+        // Actualizar referencias
+        const actualSendBtn = document.getElementById("chatSendBtn");
+        const actualInputEl = document.getElementById("chatInput");
+        
+        if (actualSendBtn && actualInputEl) {
+            actualSendBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('📤 Botón enviar clickeado');
                 enviarMensaje();
-            }
-        });
+            });
+            
+            actualInputEl.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    console.log('📤 Enter presionado');
+                    enviarMensaje();
+                }
+            });
+            
+            console.log('✅ Eventos configurados correctamente');
+        } else {
+            console.error('❌ No se pudieron obtener los elementos actualizados');
+        }
     }
 
     async function enviarMensaje() {
-        const texto = (chatInputEl.value || "").trim();
+        console.log('📨 enviarMensaje llamado');
+        
+        // Obtener elementos actualizados
+        const actualInputEl = document.getElementById("chatInput");
+        const actualSendBtn = document.getElementById("chatSendBtn");
+        
+        if (!actualInputEl || !actualSendBtn) {
+            console.error('❌ No se encontraron los elementos del input o botón');
+            return;
+        }
+        
+        const texto = (actualInputEl.value || "").trim();
+        console.log('📝 Texto a enviar:', texto);
+        console.log('chatRef:', chatRef);
+        console.log('currentUser:', currentUser);
+        
         if (!texto || !chatRef || !currentUser) {
+            console.warn('⚠️ No se puede enviar: texto vacío o falta chatRef/currentUser');
             return;
         }
 
-        chatSendBtn.disabled = true;
+        actualSendBtn.disabled = true;
 
         try {
             const mensajesRef = chatRef.collection("messages");
@@ -734,6 +936,7 @@
                 message: texto,
                 type: "text",
                 senderId: currentUser.uid,
+                sender_id: currentUser.uid, // Agregar también sender_id para compatibilidad
                 senderName: senderName,
                 status: "sent", // Estados: "sent", "delivered", "read"
                 createdAt: serverTimestamp,
@@ -742,12 +945,22 @@
                 updated_at: serverTimestamp,
                 readBy: [currentUser.uid],
             };
+            
+            console.log('💾 Datos del mensaje a guardar:', {
+                senderId: messageData.senderId,
+                sender_id: messageData.sender_id,
+                currentUserUid: currentUser.uid,
+                texto: texto
+            });
 
             if (body.dataset.userEmail) {
                 messageData.senderEmail = body.dataset.userEmail;
             }
 
+            console.log('💾 Guardando mensaje en Firestore...');
             const messageRef = await mensajesRef.add(messageData);
+            console.log('✅ Mensaje guardado con ID:', messageRef.id);
+            console.log('📋 Datos del mensaje:', messageData);
             
             // Marcar como entregado después de un momento (el mensaje está en Firestore)
             setTimeout(async () => {
@@ -756,6 +969,7 @@
                         status: "delivered",
                         deliveredAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
+                    console.log('✅ Mensaje marcado como entregado');
                 } catch (error) {
                     console.warn("⚠️ No se pudo marcar mensaje como entregado:", error);
                 }
@@ -776,7 +990,9 @@
                     updated_at: timestamp,
                     updatedAt: timestamp,
                     lastMessage: texto,
+                    last_message: texto, // Agregar también last_message para compatibilidad
                     lastMessageAt: timestamp,
+                    last_message_at: timestamp, // Agregar también last_message_at para compatibilidad
                     lastMessageSenderId: currentUser.uid,
                     lastMessageSenderName: currentUserName,
                     lastMessageSenderRole: chatRole,
@@ -852,13 +1068,26 @@
                 transaction.set(chatRef, updates, { merge: true });
             });
 
-            chatInputEl.value = "";
-            chatInputEl.focus();
+            actualInputEl.value = "";
+            actualInputEl.focus();
+            console.log('✅ Mensaje enviado correctamente');
+            
+            // Notificar a la lista de chats que se actualizó el último mensaje
+            actualizarCacheUltimoMensaje(chatDocId, texto);
+            
+            // Forzar scroll al final después de enviar
+            setTimeout(() => {
+                const messagesContainer = document.getElementById("chatMessages");
+                if (messagesContainer) {
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    console.log('📜 Scroll forzado después de enviar');
+                }
+            }, 200);
         } catch (error) {
             console.error("❌ Error enviando mensaje:", error);
             alert("No se pudo enviar tu mensaje. Inténtalo nuevamente.");
         } finally {
-            chatSendBtn.disabled = false;
+            actualSendBtn.disabled = false;
         }
     }
 
@@ -921,13 +1150,20 @@
     }
 
     function mostrarError(mensaje) {
+        console.error('❌ Error en chat:', mensaje);
+        // No mostrar errores en el área de mensajes, solo loguearlos
+        // Los errores se manejan de manera más discreta
         if (chatMessagesEl) {
-            chatMessagesEl.innerHTML = `
-                <div class="chat-error">
-                    <i class="fas fa-exclamation-circle"></i>
-                    <p>${mensaje}</p>
-                </div>
-            `;
+            // Solo mostrar un estado vacío si no hay mensajes
+            if (chatMessagesEl.children.length === 0 || 
+                (chatMessagesEl.children.length === 1 && chatMessagesEl.querySelector('.chat-loading'))) {
+                chatMessagesEl.innerHTML = `
+                    <div class="chat-empty-messages">
+                        <i class="fas fa-comments"></i>
+                        <p>No hay mensajes disponibles.</p>
+                    </div>
+                `;
+            }
         }
     }
 

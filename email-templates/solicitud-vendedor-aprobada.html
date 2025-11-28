@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solicitud de Vendedor Aprobada - AgroMarket</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 0;
+        }
+        .header {
+            background: linear-gradient(135deg, #2ba656 0%, #228B22 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .success-box {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .success-box h2 {
+            margin: 0 0 10px 0;
+            color: #155724;
+            font-size: 24px;
+        }
+        .success-box p {
+            margin: 0;
+            color: #155724;
+            font-size: 16px;
+        }
+        .info-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .info-section h3 {
+            margin: 0 0 15px 0;
+            color: #2ba656;
+            font-size: 18px;
+        }
+        .info-item {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+        }
+        .info-item strong {
+            min-width: 120px;
+            color: #555;
+        }
+        .info-item span {
+            color: #333;
+        }
+        .cta-button {
+            display: inline-block;
+            background: #2ba656;
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .cta-button:hover {
+            background: #228B22;
+        }
+        .footer {
+            background: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍃 AgroMarket</h1>
+            <p>Solicitud de Vendedor Aprobada</p>
+        </div>
+        
+        <div class="content">
+            <div class="success-box">
+                <h2>✅ ¡Felicidades!</h2>
+                <p>Tu solicitud para ser vendedor ha sido aprobada.</p>
+            </div>
+            
+            <p>Hola <strong>{{nombre}}</strong>,</p>
+            
+            <p>Nos complace informarte que tu solicitud para convertirte en vendedor en AgroMarket ha sido <strong>aprobada</strong>.</p>
+            
+            <div class="info-section">
+                <h3>📋 Información de tu cuenta</h3>
+                <div class="info-item">
+                    <strong>Nombre de tienda:</strong>
+                    <span>{{nombre_tienda}}</span>
+                </div>
+                <div class="info-item">
+                    <strong>Ubicación:</strong>
+                    <span>{{ubicacion}}</span>
+                </div>
+                <div class="info-item">
+                    <strong>Email:</strong>
+                    <span>{{email}}</span>
+                </div>
+            </div>
+            
+            <p>Ahora puedes:</p>
+            <ul>
+                <li>Publicar productos en tu catálogo</li>
+                <li>Gestionar tus ventas desde el panel de vendedor</li>
+                <li>Recibir pedidos de compradores</li>
+                <li>Configurar métodos de pago</li>
+            </ul>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="https://tu-dominio.com/vendedor/panel" class="cta-button">
+                    Ir a mi Panel de Vendedor
+                </a>
+            </div>
+            
+            <p>Si tienes alguna pregunta, no dudes en contactarnos.</p>
+            
+            <p>¡Bienvenido a la comunidad de vendedores de AgroMarket!</p>
+        </div>
+        
+        <div class="footer">
+            <p><strong>AgroMarket</strong></p>
+            <p>Tu plataforma de confianza para comprar y vender productos agrícolas</p>
+            <p>© {{year}} AgroMarket - Todos los derechos reservados</p>
+        </div>
+    </div>
+</body>
+</html>
+

@@ -60,17 +60,18 @@ function inicializarFirebase() {
 // Exportar la función de inicialización
 window.inicializarFirebase = inicializarFirebase;
 
-// Inicializar Firebase cuando esté disponible (solo si no hay otros scripts)
-if (typeof firebase !== 'undefined' && !window.firebaseInitialized) {
-  try {
-    // Verificar que la configuración esté disponible
-    if (window.firebaseConfig) {
-      inicializarFirebase();
-      window.firebaseInitialized = true;
-    } else {
-      console.error('❌ Configuración de Firebase no disponible');
-    }
-  } catch (error) {
-    console.error('❌ Error en inicialización automática:', error);
-  }
-}
+// NO inicializar automáticamente - dejar que cada página lo haga según necesite
+// Esto evita conflictos cuando múltiples scripts intentan inicializar Firebase
+// if (typeof firebase !== 'undefined' && !window.firebaseInitialized) {
+//   try {
+//     // Verificar que la configuración esté disponible
+//     if (window.firebaseConfig) {
+//       inicializarFirebase();
+//       window.firebaseInitialized = true;
+//     } else {
+//       console.error('❌ Configuración de Firebase no disponible');
+//     }
+//   } catch (error) {
+//     console.error('❌ Error en inicialización automática:', error);
+//   }
+// }

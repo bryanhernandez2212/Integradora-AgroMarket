@@ -18,6 +18,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
     
     <!-- Firebase Config -->
     <script src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
@@ -126,13 +127,6 @@
                     </a>
                 </div>
 
-                <!-- Estadísticas del usuario -->
-                <div class="stats-section">
-                    <h3><i class="fas fa-chart-bar"></i> Mis Estadísticas</h3>
-                    <div class="stats-grid" id="stats-grid">
-                        <!-- Las estadísticas se cargarán dinámicamente según el rol -->
-                    </div>
-                </div>
 
             </aside>
 
@@ -370,18 +364,29 @@
                     throw new Error('Configuración de Firebase no disponible. Verifica que firebase-config.js esté cargado.');
                 }
 
-                if (firebase.apps.length > 0) {
+                // Verificar si Firebase ya está inicializado
+                let app;
+                if (firebase.apps && firebase.apps.length > 0) {
                     console.log('📱 Firebase ya está inicializado, usando instancia existente');
-                    auth = firebase.auth();
-                    db = firebase.firestore();
-                    storage = firebase.storage();
+                    app = firebase.apps[0];
                 } else {
                     console.log('🆕 Inicializando nueva instancia de Firebase');
-                    const app = firebase.initializeApp(window.firebaseConfig);
-                    auth = firebase.auth();
-                    db = firebase.firestore();
-                    storage = firebase.storage();
+                    try {
+                        app = firebase.initializeApp(window.firebaseConfig);
+                    } catch (error) {
+                        // Si falla, puede ser que ya esté inicializado con otro nombre
+                        if (error.code === 'app/duplicate-app') {
+                            console.log('⚠️ Firebase ya estaba inicializado, usando instancia existente');
+                            app = firebase.app();
+                        } else {
+                            throw error;
+                        }
+                    }
                 }
+                
+                auth = firebase.auth();
+                db = firebase.firestore();
+                storage = firebase.storage();
 
                 // Validar que Storage esté correctamente inicializado
                 if (!storage || !storage.ref) {
@@ -417,6 +422,16 @@
         async function loadUserData() {
             console.log('👤 loadUserData - Iniciando carga de datos del usuario...');
             try {
+                // Verificar que auth y db estén inicializados
+                if (!auth) {
+                    console.error('❌ auth no está inicializado');
+                    throw new Error('Firebase Auth no está inicializado. Por favor, recarga la página.');
+                }
+                if (!db) {
+                    console.error('❌ db no está inicializado');
+                    throw new Error('Firestore no está inicializado. Por favor, recarga la página.');
+                }
+                
                 // Primero intentar obtener el usuario actual directamente
                 currentUser = auth.currentUser;
                 console.log('👤 Usuario actual (inmediato):', currentUser ? currentUser.uid : 'null');
@@ -518,7 +533,6 @@
                     await updateNavbarVisibility(); // Actualizar navbar principal
                     // Accesos rápidos iniciales
                     try { updateQuickAccess(userData.roles || []); } catch(e) { console.warn(e); }
-                    loadUserStats();
                 } else {
                     console.log('⚠️ Usuario sin datos en Firestore, creando documento básico');
                     // Crear documento básico
@@ -1455,7 +1469,6 @@
                 
                 // Actualizar interfaz
                 updateRolesDisplay();
-                loadUserStats(); // Recargar estadísticas
                 
                 // Actualizar navbar inmediatamente con los datos actualizados
                 await updateNavbarVisibility();
@@ -1725,6 +1738,97 @@
             Object.assign(userData, updateData);
             
             console.log('✅ Solicitud de vendedor creada:', solicitudData);
+            
+            // Enviar correo de notificación al administrador
+            console.log('📧 Iniciando proceso de notificación al administrador...');
+            try {
+                await notificarAdministradorNuevaSolicitud(solicitudData);
+                console.log('✅ Proceso de notificación completado');
+            } catch (emailError) {
+                console.error('❌ Error enviando notificación al administrador:', emailError);
+                console.error('❌ Detalles del error:', {
+                    message: emailError.message,
+                    code: emailError.code,
+                    stack: emailError.stack
+                });
+                // No bloquear la creación de la solicitud si falla el correo
+            }
+        }
+        
+        // Notificar al administrador sobre nueva solicitud de vendedor
+        async function notificarAdministradorNuevaSolicitud(solicitudData) {
+            console.log('🔍 [NOTIFICACIÓN] Iniciando función notificarAdministradorNuevaSolicitud');
+            console.log('🔍 [NOTIFICACIÓN] Datos de solicitud:', solicitudData);
+            
+            try {
+                // Verificar si Firebase Functions está disponible
+                console.log('🔍 [NOTIFICACIÓN] Verificando Firebase Functions...');
+                if (typeof firebase === 'undefined') {
+                    console.error('❌ [NOTIFICACIÓN] Firebase no está definido');
+                    return;
+                }
+                
+                if (!firebase.functions) {
+                    console.error('❌ [NOTIFICACIÓN] firebase.functions no está disponible');
+                    console.log('🔍 [NOTIFICACIÓN] firebase disponible:', typeof firebase !== 'undefined');
+                    console.log('🔍 [NOTIFICACIÓN] firebase.functions disponible:', typeof firebase.functions !== 'undefined');
+                    return;
+                }
+                
+                console.log('✅ [NOTIFICACIÓN] Firebase Functions está disponible');
+                const functions = firebase.functions();
+                console.log('✅ [NOTIFICACIÓN] Functions inicializado:', functions);
+                
+                // Obtener fecha de solicitud formateada
+                const fechaSolicitud = solicitudData.fecha_solicitud 
+                    ? (solicitudData.fecha_solicitud.toDate ? solicitudData.fecha_solicitud.toDate().toLocaleString('es-MX') : new Date().toLocaleString('es-MX'))
+                    : new Date().toLocaleString('es-MX');
+                
+                console.log('📧 [NOTIFICACIÓN] Preparando datos para enviar:', {
+                    solicitudId: currentUser.uid,
+                    nombre: solicitudData.nombre,
+                    email: solicitudData.email,
+                    nombreTienda: solicitudData.nombre_tienda,
+                    ubicacion: solicitudData.ubicacion || solicitudData.ubicacion_formatted,
+                    fechaSolicitud: fechaSolicitud
+                });
+                
+                // Llamar a la Firebase Function
+                console.log('📞 [NOTIFICACIÓN] Llamando a Firebase Function: sendNewSellerApplicationNotification');
+                const sendNewSellerApplicationNotification = functions.httpsCallable('sendNewSellerApplicationNotification');
+                
+                console.log('⏳ [NOTIFICACIÓN] Esperando respuesta de Firebase Function...');
+                const result = await sendNewSellerApplicationNotification({
+                    solicitudId: currentUser.uid,
+                    nombre: solicitudData.nombre,
+                    email: solicitudData.email,
+                    nombreTienda: solicitudData.nombre_tienda,
+                    ubicacion: solicitudData.ubicacion || solicitudData.ubicacion_formatted,
+                    fechaSolicitud: fechaSolicitud
+                });
+                
+                console.log('📥 [NOTIFICACIÓN] Respuesta recibida de Firebase Function:', result);
+                
+                if (result && result.data && result.data.success) {
+                    console.log('✅ [NOTIFICACIÓN] Notificación enviada exitosamente a administradores:', {
+                        adminsNotified: result.data.adminsNotified,
+                        adminEmails: result.data.adminEmails,
+                        messageId: result.data.messageId
+                    });
+                } else {
+                    console.warn('⚠️ [NOTIFICACIÓN] Respuesta inesperada de Firebase Function:', result);
+                    if (result && result.data) {
+                        console.warn('⚠️ [NOTIFICACIÓN] Mensaje de error:', result.data.message);
+                    }
+                }
+            } catch (error) {
+                console.error('❌ [NOTIFICACIÓN] Error completo:', error);
+                console.error('❌ [NOTIFICACIÓN] Tipo de error:', error.constructor.name);
+                console.error('❌ [NOTIFICACIÓN] Mensaje:', error.message);
+                console.error('❌ [NOTIFICACIÓN] Código:', error.code);
+                console.error('❌ [NOTIFICACIÓN] Stack:', error.stack);
+                // No lanzar el error, solo loguearlo
+            }
         }
 
         // Cambiar rol activo
@@ -1823,7 +1927,6 @@
                 // Actualizar interfaz
                 updateRolesDisplay();
                 await updateNavbarVisibility(); // Actualizar navbar principal
-                loadUserStats(); // Recargar estadísticas
 
                 try {
                     await iniciarStripeConnectOnboarding();
@@ -1871,7 +1974,6 @@
                 // Actualizar interfaz
                 updateRolesDisplay();
                 await updateNavbarVisibility(); // Actualizar navbar principal
-                loadUserStats(); // Recargar estadísticas
 
                 showMessage('Rol de comprador agregado exitosamente', 'success');
 
@@ -1924,7 +2026,6 @@
                 updateProfileUI();
                 updateRolesDisplay();
                 await updateNavbarVisibility(); // Actualizar navbar principal
-                loadUserStats(); // Recargar estadísticas
 
                 showMessage(`Rol ${rolAEliminar} eliminado exitosamente`, 'success');
 
@@ -2055,479 +2156,6 @@
             });
         }
 
-        // Cargar estadísticas del usuario
-        async function loadUserStats() {
-            try {
-                const roles = userData.roles || ['comprador'];
-                const rolActivo = userData.rol_activo || 'comprador';
-                
-                console.log('🔄 Cargando estadísticas para roles:', roles, 'Rol activo:', rolActivo);
-                
-                if (roles.length > 1) {
-                    // Usuario con múltiples roles - mostrar estadísticas de ambos
-                    await loadEstadisticasMultiples(roles);
-                } else if (rolActivo === 'vendedor') {
-                    await loadVendedorStats();
-                } else {
-                    await loadCompradorStats();
-                }
-
-            } catch (error) {
-                console.error('❌ Error cargando estadísticas:', error);
-            }
-        }
-
-        // Cargar estadísticas para usuarios con múltiples roles
-        async function loadEstadisticasMultiples(roles) {
-            try {
-                console.log('🔄 Cargando estadísticas múltiples para roles:', roles);
-                
-                const estadisticas = {
-                    vendedor: null,
-                    comprador: null
-                };
-
-                // Cargar estadísticas de vendedor si tiene ese rol
-                if (roles.includes('vendedor')) {
-                    console.log('📊 Cargando estadísticas de vendedor...');
-                    estadisticas.vendedor = await getVendedorStatsData();
-                }
-
-                // Cargar estadísticas de comprador si tiene ese rol
-                if (roles.includes('comprador')) {
-                    console.log('🛒 Cargando estadísticas de comprador...');
-                    estadisticas.comprador = await getCompradorStatsData();
-                }
-
-                // Mostrar estadísticas combinadas
-                showEstadisticasMultiples(estadisticas, roles);
-
-            } catch (error) {
-                console.error('❌ Error cargando estadísticas múltiples:', error);
-                // Fallback a estadísticas básicas
-                showEstadisticasMultiples({
-                    vendedor: null,
-                    comprador: null
-                }, roles);
-            }
-        }
-
-        // Obtener datos de estadísticas de vendedor
-        async function getVendedorStatsData() {
-            try {
-                // Cargar productos del vendedor
-                const productosSnapshot = await db.collection('productos')
-                    .where('vendedor_id', '==', currentUser.uid)
-                    .get();
-                
-                const totalProductos = productosSnapshot.size;
-                let productosActivos = 0;
-                
-                productosSnapshot.forEach(doc => {
-                    const producto = doc.data();
-                    if (producto.activo !== false) {
-                        productosActivos++;
-                    }
-                });
-
-                // Cargar ventas del vendedor
-                const ventasSnapshot = await db.collection('ventas')
-                    .where('vendedor_id', '==', currentUser.uid)
-                    .get();
-                
-                const totalVentas = ventasSnapshot.size;
-                let totalIngresos = 0;
-                let ventasEsteMes = 0;
-                const fechaActual = new Date();
-                const inicioMes = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 1);
-                
-                ventasSnapshot.forEach(doc => {
-                    const venta = doc.data();
-                    totalIngresos += venta.total || 0;
-                    
-                    // Contar ventas de este mes
-                    if (venta.fecha_venta && venta.fecha_venta.toDate() >= inicioMes) {
-                        ventasEsteMes++;
-                    }
-                });
-
-                return {
-                    totalProductos,
-                    productosActivos,
-                    productosInactivos: totalProductos - productosActivos,
-                    totalVentas,
-                    totalIngresos,
-                    ventasEsteMes
-                };
-
-            } catch (error) {
-                console.error('❌ Error obteniendo datos de vendedor:', error);
-                return {
-                    totalProductos: 0,
-                    productosActivos: 0,
-                    productosInactivos: 0,
-                    totalVentas: 0,
-                    totalIngresos: 0,
-                    ventasEsteMes: 0
-                };
-            }
-        }
-
-        // Obtener datos de estadísticas de comprador
-        async function getCompradorStatsData() {
-            try {
-                // Cargar compras realizadas
-                const comprasSnapshot = await db.collection('compras')
-                    .where('usuario_id', '==', currentUser.uid)
-                    .get();
-                
-                const totalCompras = comprasSnapshot.size;
-                let totalGastado = 0;
-                
-                comprasSnapshot.forEach(doc => {
-                    const compra = doc.data();
-                    totalGastado += compra.total || 0;
-                });
-
-                return {
-                    totalCompras,
-                    totalGastado
-                };
-
-            } catch (error) {
-                console.error('❌ Error obteniendo datos de comprador:', error);
-                return {
-                    totalCompras: 0,
-                    totalGastado: 0
-                };
-            }
-        }
-
-        // Cargar estadísticas de vendedor
-        async function loadVendedorStats() {
-            try {
-                console.log('🔄 Cargando estadísticas de vendedor...');
-                
-                // Cargar productos del vendedor
-                const productosSnapshot = await db.collection('productos')
-                    .where('vendedor_id', '==', currentUser.uid)
-                    .get();
-                
-                const totalProductos = productosSnapshot.size;
-                let productosActivos = 0;
-                let productosInactivos = 0;
-                
-                productosSnapshot.forEach(doc => {
-                    const producto = doc.data();
-                    if (producto.activo !== false) {
-                        productosActivos++;
-                    } else {
-                        productosInactivos++;
-                    }
-                });
-
-                // Cargar ventas del vendedor
-                const ventasSnapshot = await db.collection('ventas')
-                    .where('vendedor_id', '==', currentUser.uid)
-                    .get();
-                
-                const totalVentas = ventasSnapshot.size;
-                let totalIngresos = 0;
-                let ventasEsteMes = 0;
-                const fechaActual = new Date();
-                const inicioMes = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 1);
-                
-                ventasSnapshot.forEach(doc => {
-                    const venta = doc.data();
-                    totalIngresos += venta.total || 0;
-                    
-                    // Contar ventas de este mes
-                    if (venta.fecha_venta && venta.fecha_venta.toDate() >= inicioMes) {
-                        ventasEsteMes++;
-                    }
-                });
-
-                // Cargar productos en carrito (desde localStorage por ahora)
-                const carrito = JSON.parse(localStorage.getItem('carrito')) || [];
-                const productosEnCarrito = carrito.length;
-
-                // Mostrar estadísticas de vendedor
-                showVendedorStats({
-                    totalProductos,
-                    productosActivos,
-                    productosInactivos,
-                    totalVentas,
-                    totalIngresos,
-                    ventasEsteMes,
-                    productosEnCarrito
-                });
-
-                console.log('✅ Estadísticas de vendedor cargadas:', {
-                    totalProductos,
-                    productosActivos,
-                    totalVentas,
-                    totalIngresos
-                });
-
-            } catch (error) {
-                console.error('❌ Error cargando estadísticas de vendedor:', error);
-                showVendedorStats({
-                    totalProductos: 0,
-                    productosActivos: 0,
-                    productosInactivos: 0,
-                    totalVentas: 0,
-                    totalIngresos: 0,
-                    ventasEsteMes: 0,
-                    productosEnCarrito: 0
-                });
-            }
-        }
-
-        // Cargar estadísticas de comprador
-        async function loadCompradorStats() {
-            try {
-                console.log('🔄 Cargando estadísticas de comprador...');
-                
-                // Cargar compras realizadas
-                const comprasSnapshot = await db.collection('compras')
-                    .where('usuario_id', '==', currentUser.uid)
-                    .get();
-                
-                const totalCompras = comprasSnapshot.size;
-                let totalGastado = 0;
-                
-                comprasSnapshot.forEach(doc => {
-                    const compra = doc.data();
-                    totalGastado += compra.total || 0;
-                });
-
-                // Cargar productos en carrito (desde localStorage por ahora)
-                const carrito = JSON.parse(localStorage.getItem('carrito')) || [];
-                const productosEnCarrito = carrito.length;
-
-                // Mostrar estadísticas de comprador
-                showCompradorStats({
-                    totalCompras,
-                    totalGastado,
-                    productosEnCarrito
-                });
-
-                console.log('✅ Estadísticas de comprador cargadas:', {
-                    totalCompras,
-                    totalGastado
-                });
-
-            } catch (error) {
-                console.error('❌ Error cargando estadísticas de comprador:', error);
-                showCompradorStats({
-                    totalCompras: 0,
-                    totalGastado: 0,
-                    productosEnCarrito: 0
-                });
-            }
-        }
-
-        // Mostrar estadísticas de vendedor
-        function showVendedorStats(stats) {
-            const statsGrid = document.getElementById('stats-grid');
-            
-            statsGrid.innerHTML = `
-                <div class="stat-card">
-                    <div class="stat-icon vendedor">
-                        <i class="fas fa-box"></i>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-number">${stats.totalProductos}</span>
-                        <span class="stat-label">Productos Publicados</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon activos">
-                        <i class="fas fa-check-circle"></i>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-number">${stats.productosActivos}</span>
-                        <span class="stat-label">Productos Activos</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon ventas">
-                        <i class="fas fa-shopping-bag"></i>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-number">${stats.totalVentas}</span>
-                        <span class="stat-label">Ventas Realizadas</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon ingresos">
-                        <i class="fas fa-dollar-sign"></i>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-number">$${stats.totalIngresos.toFixed(2)}</span>
-                        <span class="stat-label">Total Ingresos</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon mes">
-                        <i class="fas fa-calendar-alt"></i>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-number">${stats.ventasEsteMes}</span>
-                        <span class="stat-label">Ventas Este Mes</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon carrito">
-                        <i class="fas fa-shopping-cart"></i>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-number">${stats.productosEnCarrito}</span>
-                        <span class="stat-label">En Mi Carrito</span>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Mostrar estadísticas de comprador
-        function showCompradorStats(stats) {
-            const statsGrid = document.getElementById('stats-grid');
-            
-            statsGrid.innerHTML = `
-                <div class="stat-card">
-                    <div class="stat-icon comprador">
-                        <i class="fas fa-shopping-bag"></i>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-number">${stats.totalCompras}</span>
-                        <span class="stat-label">Compras Realizadas</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon gasto">
-                        <i class="fas fa-dollar-sign"></i>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-number">$${stats.totalGastado.toFixed(2)}</span>
-                        <span class="stat-label">Total Gastado</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon carrito">
-                        <i class="fas fa-shopping-cart"></i>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-number">${stats.productosEnCarrito}</span>
-                        <span class="stat-label">Productos en Carrito</span>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Mostrar estadísticas múltiples (vendedor + comprador)
-        function showEstadisticasMultiples(estadisticas, roles) {
-            const statsGrid = document.getElementById('stats-grid');
-            const carrito = JSON.parse(localStorage.getItem('carrito')) || [];
-            const productosEnCarrito = carrito.length;
-            
-            let html = '';
-            
-            // Agregar encabezado si tiene múltiples roles
-            if (roles.length > 1) {
-            }
-            
-            // Estadísticas de vendedor
-            if (estadisticas.vendedor) {
-                html += `
-                    <div class="role-stats-section">
-                        <div class="role-stats-header">
-                            <h5><i class="fas fa-store"></i> Como Vendedor</h5>
-                        </div>
-                        <div class="role-stats-grid">
-                            <div class="stat-card">
-                                <div class="stat-icon vendedor">
-                                    <i class="fas fa-box"></i>
-                                </div>
-                                <div class="stat-info">
-                                    <span class="stat-number">${estadisticas.vendedor.totalProductos}</span>
-                                    <span class="stat-label">Productos Publicados</span>
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-icon activos">
-                                    <i class="fas fa-check-circle"></i>
-                                </div>
-                                <div class="stat-info">
-                                    <span class="stat-number">${estadisticas.vendedor.productosActivos}</span>
-                                    <span class="stat-label">Productos Activos</span>
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-icon ventas">
-                                    <i class="fas fa-shopping-bag"></i>
-                                </div>
-                                <div class="stat-info">
-                                    <span class="stat-number">${estadisticas.vendedor.totalVentas}</span>
-                                    <span class="stat-label">Ventas Realizadas</span>
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-icon ingresos">
-                                    <i class="fas fa-dollar-sign"></i>
-                                </div>
-                                <div class="stat-info">
-                                    <span class="stat-number">$${estadisticas.vendedor.totalIngresos.toFixed(2)}</span>
-                                    <span class="stat-label">Total Ingresos</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            // Estadísticas de comprador
-            if (estadisticas.comprador) {
-                html += `
-                    <div class="role-stats-section">
-                        <div class="role-stats-header">
-                            <h5><i class="fas fa-shopping-cart"></i> Como Comprador</h5>
-                        </div>
-                        <div class="role-stats-grid">
-                            <div class="stat-card">
-                                <div class="stat-icon comprador">
-                                    <i class="fas fa-shopping-bag"></i>
-                                </div>
-                                <div class="stat-info">
-                                    <span class="stat-number">${estadisticas.comprador.totalCompras}</span>
-                                    <span class="stat-label">Compras Realizadas</span>
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-icon gasto">
-                                    <i class="fas fa-dollar-sign"></i>
-                                </div>
-                                <div class="stat-info">
-                                    <span class="stat-number">$${estadisticas.comprador.totalGastado.toFixed(2)}</span>
-                                    <span class="stat-label">Total Gastado</span>
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-icon carrito">
-                                    <i class="fas fa-shopping-cart"></i>
-                                </div>
-                                <div class="stat-info">
-                                    <span class="stat-number">${productosEnCarrito}</span>
-                                    <span class="stat-label">En Mi Carrito</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            
-            statsGrid.innerHTML = html;
-        }
 
         // Actualizar perfil
         async function updateProfile() {
@@ -2776,20 +2404,31 @@
 
                     // Suscribirse en tiempo real a roles del usuario
                     try {
-                        const auth = firebase.auth();
                         const user = auth.currentUser || await new Promise(resolve => auth.onAuthStateChanged(resolve));
-                        if (user) {
-                            if (window.__perfilRolesUnsub) { try { window.__perfilRolesUnsub(); } catch(e) {} }
-                    window.__perfilRolesUnsub = firebase.firestore().collection('usuarios').doc(user.uid)
-                        .onSnapshot(async (doc) => {
+                        if (user && db) {
+                            if (window.__perfilRolesUnsub) { 
+                                try { 
+                                    window.__perfilRolesUnsub(); 
+                                } catch(e) {
+                                    console.warn('Error cancelando suscripción anterior:', e);
+                                } 
+                            }
+                            window.__perfilRolesUnsub = db.collection('usuarios').doc(user.uid)
+                                .onSnapshot(async (doc) => {
                                     if (doc && doc.exists) {
                                         userData = doc.data() || {};
                                         await updateNavbarVisibility();
-                                try { updateQuickAccess(userData.roles || []); } catch(e) { console.warn(e); }
+                                        try { 
+                                            updateQuickAccess(userData.roles || []); 
+                                        } catch(e) { 
+                                            console.warn('Error en updateQuickAccess:', e); 
+                                        }
                                     }
                                 }, (err) => console.warn('onSnapshot roles error:', err));
                         }
-                    } catch (e) { console.warn('No se pudo suscribir a roles en tiempo real:', e); }
+                    } catch (e) { 
+                        console.warn('No se pudo suscribir a roles en tiempo real:', e); 
+                    }
 
                     console.log('📥 Llamando a loadUserData...');
                     await loadUserData();
@@ -2866,7 +2505,6 @@
                     userData.roles = ['comprador', 'vendedor'];
                     userData.rol_activo = 'comprador';
                     updateRolesDisplay();
-                    loadUserStats(); // Recargar estadísticas con roles múltiples
                     showMessage('Roles múltiples simulados para pruebas', 'info');
                 }
             };
@@ -2876,67 +2514,10 @@
                 if (userData) {
                     userData.rol_activo = rol;
                     updateRolesDisplay();
-                    loadUserStats(); // Recargar estadísticas según el rol
                     showMessage(`Rol cambiado a ${rol} (simulación)`, 'info');
                 }
             };
 
-            // Función para simular datos de vendedor (solo para pruebas)
-            window.simularDatosVendedor = function() {
-                if (userData && userData.rol_activo === 'vendedor') {
-                    showVendedorStats({
-                        totalProductos: 15,
-                        productosActivos: 12,
-                        productosInactivos: 3,
-                        totalVentas: 8,
-                        totalIngresos: 1250.50,
-                        ventasEsteMes: 3,
-                        productosEnCarrito: 2
-                    });
-                    showMessage('Datos de vendedor simulados para pruebas', 'info');
-                } else {
-                    showMessage('Cambia a rol de vendedor primero', 'warning');
-                }
-            };
-
-            // Función para simular datos de comprador (solo para pruebas)
-            window.simularDatosComprador = function() {
-                if (userData && userData.rol_activo === 'comprador') {
-                    showCompradorStats({
-                        totalCompras: 5,
-                        totalGastado: 450.75,
-                        productosEnCarrito: 3
-                    });
-                    showMessage('Datos de comprador simulados para pruebas', 'info');
-                } else {
-                    showMessage('Cambia a rol de comprador primero', 'warning');
-                }
-            };
-
-            // Función para simular estadísticas múltiples (solo para pruebas)
-            window.simularEstadisticasMultiples = function() {
-                if (userData && userData.roles && userData.roles.length > 1) {
-                    const estadisticas = {
-                        vendedor: {
-                            totalProductos: 12,
-                            productosActivos: 10,
-                            productosInactivos: 2,
-                            totalVentas: 15,
-                            totalIngresos: 2250.80,
-                            ventasEsteMes: 4
-                        },
-                        comprador: {
-                            totalCompras: 8,
-                            totalGastado: 650.25
-                        }
-                    };
-                    
-                    showEstadisticasMultiples(estadisticas, userData.roles);
-                    showMessage('Estadísticas múltiples simuladas para pruebas', 'info');
-                } else {
-                    showMessage('Simula roles múltiples primero con simularRolesMultiples()', 'warning');
-                }
-            };
 
             // Inicializar Google Places Autocomplete para perfil
             let autocompletePerfil = null;

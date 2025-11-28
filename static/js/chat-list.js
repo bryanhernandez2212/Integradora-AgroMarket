@@ -17,6 +17,8 @@
 
     let auth = null;
     let db = null;
+    let currentUserId = null;
+    let currentUserRole = null; // Almacenar el rol activo del usuario
     let unsubscribeHandlers = [];
     const chatsMap = new Map();
     const lastMessageCache = new Map();
@@ -30,6 +32,36 @@
             const previewEl = enlace.querySelector(".chat-preview");
             if (previewEl && texto) {
                 previewEl.textContent = texto;
+            }
+            // Actualizar también la fecha a "Hace un momento"
+            const timeEl = enlace.querySelector(".chat-time");
+            if (timeEl) {
+                timeEl.textContent = "Hace un momento";
+            }
+            // Mover el chat al principio de la lista (reordenar)
+            if (currentUserId) {
+                const chats = Array.from(chatsMap.values());
+                const chatActualizado = chats.find(c => c.id === chatId);
+                if (chatActualizado) {
+                    // Actualizar la fecha del chat en el mapa
+                    chatActualizado.last_message = texto;
+                    chatActualizado.lastMessage = texto;
+                    const ahora = Date.now();
+                    chatActualizado.last_message_at = { seconds: Math.floor(ahora / 1000), nanoseconds: 0 };
+                    chatActualizado.lastMessageAt = { seconds: Math.floor(ahora / 1000), nanoseconds: 0 };
+                    chatActualizado.updated_at = { seconds: Math.floor(ahora / 1000), nanoseconds: 0 };
+                    chatActualizado.updatedAt = { seconds: Math.floor(ahora / 1000), nanoseconds: 0 };
+                    
+                    chats.sort((a, b) => {
+                        // El chat actualizado va primero
+                        if (a.id === chatId) return -1;
+                        if (b.id === chatId) return 1;
+                        const fechaA = obtenerFecha(a);
+                        const fechaB = obtenerFecha(b);
+                        return fechaB - fechaA;
+                    });
+                    renderChats(currentUserId, chats);
+                }
             }
         }
     });
@@ -45,8 +77,10 @@
                 if (!user) {
                     limpiarSuscripciones();
                     mostrarEmptyState("Debes iniciar sesión para ver tus chats.");
+                    currentUserId = null;
                     return;
                 }
+                currentUserId = user.uid;
                 suscribirseAChats(user.uid);
             });
         })
@@ -134,18 +168,56 @@
         lastMessageCache.clear();
     }
 
-    function suscribirseAChats(uid) {
+    async function suscribirseAChats(uid) {
         limpiarSuscripciones();
         mostrarLoading(true);
 
         try {
-            const chatsRef = db.collection("chats");
+            // Obtener el rol activo del usuario desde Firestore
+            let rolActivo = null;
+            try {
+                const userDoc = await db.collection("usuarios").doc(uid).get();
+                if (userDoc.exists) {
+                    const userData = userDoc.data();
+                    rolActivo = userData.rol_activo ? String(userData.rol_activo).toLowerCase().trim() : null;
+                    console.log('🎭 Rol activo del usuario:', rolActivo);
+                }
+            } catch (error) {
+                console.warn('⚠️ No se pudo obtener el rol activo del usuario:', error);
+            }
+            
+            // Si no se encontró el rol activo, intentar obtenerlo del atributo data-chat-role del body
+            if (!rolActivo) {
+                const chatRole = body?.dataset?.chatRole;
+                if (chatRole) {
+                    rolActivo = String(chatRole).toLowerCase().trim();
+                    console.log('🎭 Rol activo obtenido del atributo data-chat-role:', rolActivo);
+                }
+            }
+            
+            // Guardar el rol activo para usarlo en el filtrado
+            currentUserRole = rolActivo;
 
-            const queries = [
-                chatsRef.where("participants", "array-contains", uid),
-                chatsRef.where("comprador_id", "==", uid),
-                chatsRef.where("vendedor_id", "==", uid),
-            ];
+            const chatsRef = db.collection("chats");
+            const queries = [];
+
+            // Filtrar chats según el rol activo
+            if (rolActivo === "comprador") {
+                // Si el rol activo es comprador, solo mostrar chats donde es comprador
+                queries.push(chatsRef.where("comprador_id", "==", uid));
+                console.log('📋 Filtrando chats como COMPRADOR');
+            } else if (rolActivo === "vendedor") {
+                // Si el rol activo es vendedor, solo mostrar chats donde es vendedor
+                queries.push(chatsRef.where("vendedor_id", "==", uid));
+                console.log('📋 Filtrando chats como VENDEDOR');
+            } else {
+                // Si no hay rol activo definido, usar el comportamiento anterior (mostrar todos)
+                console.warn('⚠️ No se encontró rol activo, mostrando todos los chats del usuario');
+                queries.push(
+                    chatsRef.where("comprador_id", "==", uid),
+                    chatsRef.where("vendedor_id", "==", uid)
+                );
+            }
 
             queries.forEach((query) => agregarSuscripcion(query, uid));
         } catch (error) {
@@ -171,14 +243,46 @@
                         hayCambios = true;
                         return;
                     }
+                    
+                    // Filtrar chats según el rol activo del usuario
+                    if (currentUserRole) {
+                        const isComprador = currentUserRole === "comprador";
+                        const isVendedor = currentUserRole === "vendedor";
+                        
+                        if (isComprador && data.comprador_id !== uid) {
+                            // Si el rol activo es comprador pero este chat no es del comprador, ignorarlo
+                            console.log('🚫 Chat ignorado (no es del comprador):', change.doc.id);
+                            return;
+                        }
+                        
+                        if (isVendedor && data.vendedor_id !== uid) {
+                            // Si el rol activo es vendedor pero este chat no es del vendedor, ignorarlo
+                            console.log('🚫 Chat ignorado (no es del vendedor):', change.doc.id);
+                            return;
+                        }
+                    }
 
                     const chatAnterior = chatsMap.get(change.doc.id);
                     const unreadAnterior = chatAnterior?.unreadCounts?.[uid] || 0;
                     const unreadNuevo = data.unreadCounts?.[uid] || 0;
+                    
+                    // Verificar si cambió el último mensaje
+                    const previewAnterior = obtenerPreview(chatAnterior || {});
+                    const previewNuevo = obtenerPreview(data);
+                    const lastMessageAnterior = chatAnterior?.last_message || chatAnterior?.lastMessage || "";
+                    const lastMessageNuevo = data.last_message || data.lastMessage || "";
+                    const lastMessageAtAnterior = obtenerFecha(chatAnterior || {});
+                    const lastMessageAtNuevo = obtenerFecha(data);
 
                     // Si cambió el contador de mensajes no leídos, marcar como cambio importante
                     if (unreadAnterior !== unreadNuevo) {
                         console.log(`📬 Chat ${change.doc.id}: Contador cambió de ${unreadAnterior} a ${unreadNuevo}`);
+                        hayCambios = true;
+                    }
+                    
+                    // Si cambió el último mensaje o la fecha, marcar como cambio importante
+                    if (lastMessageAnterior !== lastMessageNuevo || lastMessageAtAnterior !== lastMessageAtNuevo) {
+                        console.log(`💬 Chat ${change.doc.id}: Último mensaje cambió de "${lastMessageAnterior}" a "${lastMessageNuevo}"`);
                         hayCambios = true;
                     }
 
@@ -191,10 +295,24 @@
                         hayCambios = true;
                     }
 
-                    const preview = obtenerPreview(data);
+                    // Actualizar el preview del último mensaje
+                    const preview = previewNuevo || previewAnterior;
                     if (preview && preview !== defaultPreview) {
                         lastMessageCache.set(change.doc.id, preview);
-                    } else {
+                        // Actualizar el preview en el DOM si el elemento existe
+                        const enlace = chatListEl.querySelector(`[data-chat-id="${change.doc.id}"]`);
+                        if (enlace) {
+                            const previewEl = enlace.querySelector(".chat-preview");
+                            if (previewEl) {
+                                previewEl.textContent = preview;
+                            }
+                            // Actualizar también la fecha
+                            const timeEl = enlace.querySelector(".chat-time");
+                            if (timeEl && lastMessageAtNuevo) {
+                                timeEl.textContent = formatearFechaRelativa(lastMessageAtNuevo);
+                            }
+                        }
+                    } else if (change.doc.id) {
                         actualizarPreviewDesdeMensajes(change.doc.id);
                     }
                 });
@@ -380,26 +498,11 @@
             enlace.appendChild(avatar);
             enlace.appendChild(info);
 
-            // Interceptar clic para cargar conversación dinámicamente en pantalla grande
-            enlace.addEventListener('click', (e) => {
-                const isLargeScreen = window.innerWidth > 992;
-                const placeholder = document.getElementById('chatPlaceholder');
-                const conversation = document.getElementById('chatConversation');
-                
-                // Solo interceptar si estamos en pantalla grande Y existen los elementos de conversación dinámica
-                if (isLargeScreen && placeholder && conversation) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    try {
-                        cargarConversacionDinamica(pedidoId, nombre, partnerId, iniciales, chat.id);
-                    } catch (error) {
-                        console.error('Error cargando conversación dinámica:', error);
-                        // Si hay error, permitir navegación normal
-                        window.location.href = enlace.href;
-                    }
-                }
-                // En pantalla pequeña o si no existen los elementos, dejar que el enlace navegue normalmente
-            });
+            // NO interceptar clic - siempre navegar a la página de conversación
+            // El usuario no quiere el panel de conversación en la lista de chats
+            // enlace.addEventListener('click', (e) => {
+            //     // Siempre navegar a la página de conversación individual
+            // });
 
             fragment.appendChild(enlace);
             } catch (error) {

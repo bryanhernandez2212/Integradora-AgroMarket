@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solicitud de Vendedor Recibida - AgroMarket</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 0;
+        }
+        .header {
+            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .info-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .info-box h2 {
+            margin: 0 0 10px 0;
+            color: #856404;
+            font-size: 24px;
+        }
+        .footer {
+            background: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍃 AgroMarket</h1>
+            <p>Solicitud Recibida</p>
+        </div>
+        
+        <div class="content">
+            <div class="info-box">
+                <h2>⏳ Solicitud en Revisión</h2>
+                <p>Hemos recibido tu solicitud para ser vendedor y está siendo revisada por nuestro equipo.</p>
+            </div>
+            
+            <p>Hola <strong>{{nombre}}</strong>,</p>
+            
+            <p>Gracias por tu interés en convertirte en vendedor en AgroMarket.</p>
+            
+            <p>Tu solicitud ha sido recibida y está siendo revisada por nuestro equipo de administradores. Te notificaremos por correo electrónico cuando se complete la revisión.</p>
+            
+            <p><strong>Información de tu solicitud:</strong></p>
+            <ul>
+                <li><strong>Nombre de tienda:</strong> {{nombre_tienda}}</li>
+                <li><strong>Ubicación:</strong> {{ubicacion}}</li>
+                <li><strong>Fecha de solicitud:</strong> {{fecha_solicitud}}</li>
+            </ul>
+            
+            <p>El proceso de revisión generalmente toma entre 1 a 3 días hábiles.</p>
+            
+            <p>Si tienes alguna pregunta, no dudes en contactarnos.</p>
+        </div>
+        
+        <div class="footer">
+            <p><strong>AgroMarket</strong></p>
+            <p>© {{year}} AgroMarket - Todos los derechos reservados</p>
+        </div>
+    </div>
+</body>
+</html>
+

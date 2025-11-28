@@ -38,7 +38,7 @@ class Config:
     # Firebase Admin / Firestore
     FIREBASE_CREDENTIALS_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH')
     FIREBASE_SERVICE_ACCOUNT_JSON = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
-    FIREBASE_PROJECT_ID = os.environ.get('FIREBASE_PROJECT_ID')
+    FIREBASE_PROJECT_ID = os.environ.get('FIREBASE_PROJECT_ID') or 'agromarket-625b2'
     
 
 class DevelopmentConfig(Config):

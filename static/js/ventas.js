@@ -741,12 +741,46 @@ async function cambiarEstadoPedido(compraId, nuevoEstado, indexVenta) {
             return;
         }
 
-        const productosActualizados = productos.map(producto => {
-            let vendedorId = producto.vendedor_id || '';
+        // Logging para diagnóstico
+        console.log('🔍 [CAMBIO ESTADO] Datos de la compra:', {
+            compraId: compraId,
+            usuarioId: compraData.usuario_id,
+            vendedoresIds: compraData.vendedores_ids,
+            productosCount: productos.length,
+            usuarioActual: user.uid,
+            usuarioActualEmail: user.email
+        });
 
-            if (!vendedorId && producto.producto_id) {
-                return producto;
-            }
+        // Verificar si el usuario está en vendedores_ids
+        const vendedoresIds = compraData.vendedores_ids || [];
+        const esVendedor = vendedoresIds.includes(user.uid);
+        console.log('🔍 [CAMBIO ESTADO] Verificación de vendedor:', {
+            esVendedor: esVendedor,
+            vendedoresIds: vendedoresIds,
+            usuarioUid: user.uid
+        });
+
+        // Verificar si tiene productos del vendedor
+        const productosDelVendedor = productos.filter(p => {
+            const vendedorId = p.vendedor_id || p.vendedorId || '';
+            return String(vendedorId) === String(user.uid);
+        });
+        console.log('🔍 [CAMBIO ESTADO] Productos del vendedor:', {
+            cantidad: productosDelVendedor.length,
+            productos: productosDelVendedor.map(p => ({
+                nombre: p.nombre,
+                vendedor_id: p.vendedor_id || p.vendedorId
+            }))
+        });
+
+        if (productosDelVendedor.length === 0 && !esVendedor) {
+            console.error('❌ [CAMBIO ESTADO] El usuario no es vendedor de esta compra');
+            alert('Error: No tienes permisos para cambiar el estado de este pedido. No eres vendedor de los productos en esta compra.');
+            return;
+        }
+
+        const productosActualizados = productos.map(producto => {
+            let vendedorId = producto.vendedor_id || producto.vendedorId || '';
 
             if (String(vendedorId) === String(user.uid)) {
                 return {
@@ -759,11 +793,32 @@ async function cambiarEstadoPedido(compraId, nuevoEstado, indexVenta) {
             return producto;
         });
 
-        await compraRef.update({
-            productos: productosActualizados,
-            estado_pedido: nuevoEstado,
-            fecha_actualizacion_estado: firebase.firestore.FieldValue.serverTimestamp()
+        // Obtener el estado anterior antes de actualizar
+        const estadoAnterior = compraData.estado_pedido || 'preparando';
+        
+        console.log('📝 [CAMBIO ESTADO] Intentando actualizar compra:', {
+            compraId: compraId,
+            nuevoEstado: nuevoEstado,
+            estadoAnterior: estadoAnterior
         });
+        
+        try {
+            await compraRef.update({
+                productos: productosActualizados,
+                estado_pedido: nuevoEstado,
+                fecha_actualizacion_estado: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            console.log('✅ [CAMBIO ESTADO] Compra actualizada exitosamente');
+        } catch (error) {
+            console.error('❌ [CAMBIO ESTADO] Error al actualizar:', error);
+            console.error('❌ [CAMBIO ESTADO] Detalles del error:', {
+                code: error.code,
+                message: error.message,
+                stack: error.stack
+            });
+            alert('Error al actualizar el estado del pedido: ' + error.message);
+            throw error;
+        }
 
         console.log('✅ Estado del pedido actualizado:', nuevoEstado);
 
@@ -773,6 +828,29 @@ async function cambiarEstadoPedido(compraId, nuevoEstado, indexVenta) {
                 ...p,
                 estado_pedido: nuevoEstado
             }));
+        }
+
+        // Enviar correo de notificación de cambio de estado
+        // Asegurar que el compraId esté en los datos
+        const compraDataConId = { 
+            ...compraData, 
+            id: compraId,
+            compra_id: compraId 
+        };
+        
+        console.log('📧 Preparando envío de correo de cambio de estado...', {
+            compraId: compraId,
+            nuevoEstado: nuevoEstado,
+            estadoAnterior: estadoAnterior,
+            emailCliente: compraData.usuario_email
+        });
+        
+        try {
+            await enviarCorreoCambioEstado(compraDataConId, nuevoEstado, estadoAnterior, user);
+            console.log('✅ Correo de cambio de estado enviado exitosamente');
+        } catch (emailError) {
+            console.warn('⚠️ Error enviando correo de cambio de estado:', emailError);
+            // No bloquear la actualización si falla el correo
         }
 
         await cargarVentas();
@@ -951,6 +1029,98 @@ window.abrirModalDevolucionVendedor = abrirModalDevolucionVendedor;
 window.toggleMontoDevolucionVendedor = toggleMontoDevolucionVendedor;
 window.cerrarModalDevolucionVendedor = cerrarModalDevolucionVendedor;
 window.procesarDevolucionVendedor = procesarDevolucionVendedor;
+async function enviarCorreoCambioEstado(compraData, nuevoEstado, estadoAnterior, vendedorUser) {
+    try {
+        console.log('📧 Iniciando envío de correo de cambio de estado...', {
+            compraData: {
+                id: compraData.id,
+                compra_id: compraData.compra_id,
+                usuario_email: compraData.usuario_email,
+                usuario_nombre: compraData.usuario_nombre,
+                productos_count: compraData.productos?.length || 0
+            },
+            nuevoEstado: nuevoEstado,
+            estadoAnterior: estadoAnterior
+        });
+        
+        // Verificar si Firebase Functions está disponible
+        if (typeof firebase === 'undefined' || !firebase.functions) {
+            console.warn('⚠️ Firebase Functions no está disponible');
+            return;
+        }
+        
+        const functions = firebase.functions();
+        
+        // Obtener datos del cliente
+        const emailCliente = compraData.usuario_email || '';
+        const nombreCliente = compraData.usuario_nombre || 'Cliente';
+        
+        // Obtener el ID de la compra desde la referencia o los datos
+        let compraId = compraData.id || compraData.compra_id || '';
+        
+        if (!compraId) {
+            console.error('❌ No se encontró compraId en los datos de la compra');
+            return;
+        }
+        
+        if (!emailCliente) {
+            console.warn('⚠️ No se encontró email del cliente, no se puede enviar correo');
+            return;
+        }
+
+        // Obtener nombre del vendedor
+        let vendedorNombre = 'Vendedor';
+        try {
+            if (vendedorUser && vendedorUser.uid) {
+                const vendedorDoc = await db.collection('usuarios').doc(vendedorUser.uid).get();
+                if (vendedorDoc.exists) {
+                    const vendedorData = vendedorDoc.data();
+                    vendedorNombre = vendedorData.nombre || vendedorData.nombre_tienda || vendedorUser.displayName || 'Vendedor';
+                }
+            }
+        } catch (error) {
+            console.warn('⚠️ Error obteniendo nombre del vendedor:', error);
+        }
+
+        // Obtener productos del pedido (solo los del vendedor actual si es necesario)
+        const productos = compraData.productos || [];
+        
+        console.log('📧 Datos para enviar correo:', {
+            email: emailCliente,
+            nombre: nombreCliente,
+            compraId: compraId,
+            nuevoEstado: nuevoEstado,
+            estadoAnterior: estadoAnterior,
+            productos_count: productos.length,
+            vendedorNombre: vendedorNombre
+        });
+        
+        // Llamar a la Firebase Function (sintaxis v8)
+        const sendOrderStatusChangeEmail = functions.httpsCallable('sendOrderStatusChangeEmail');
+        
+        const result = await sendOrderStatusChangeEmail({
+            email: emailCliente,
+            nombre: nombreCliente,
+            compraId: compraId,
+            nuevoEstado: nuevoEstado,
+            estadoAnterior: estadoAnterior,
+            productos: productos,
+            vendedorNombre: vendedorNombre,
+            fechaActualizacion: new Date().toLocaleString('es-MX')
+        });
+
+        if (result && result.data && result.data.success) {
+            console.log('✅ Correo de cambio de estado enviado exitosamente:', result.data);
+        } else {
+            console.warn('⚠️ Error en respuesta de Firebase Function:', result);
+        }
+    } catch (error) {
+        console.error('❌ Error enviando correo de cambio de estado:', error);
+        console.error('Stack:', error.stack);
+        // No lanzar el error, solo loguearlo
+    }
+}
+
 window.cambiarEstadoPedido = cambiarEstadoPedido;
 window.mostrarPedidosEntregados = mostrarPedidosEntregados;
 window.cerrarModalEntregados = cerrarModalEntregados;

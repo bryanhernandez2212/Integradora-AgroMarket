@@ -361,6 +361,44 @@ def enviar_ticket_compra():
         if not email_cliente:
             return jsonify({'error': 'No se proporcionó el email del cliente'}), 400
         
+        # Intentar usar Firebase Functions primero
+        try:
+            from utils.firebase_functions import send_receipt_email_via_functions
+            use_firebase_functions = True
+        except ImportError:
+            use_firebase_functions = False
+        
+        if use_firebase_functions:
+            try:
+                current_app.logger.info(f"🔍 Intentando enviar comprobante con Firebase Functions...")
+                current_app.logger.info(f"📧 Datos: compra_id={compra_id}, email={email_cliente}, productos={len(productos)}")
+                success = send_receipt_email_via_functions(
+                    email=email_cliente,
+                    nombre=nombre_cliente,
+                    compra_id=compra_id,
+                    fecha_compra=fecha_compra,
+                    productos=productos,
+                    subtotal=subtotal,
+                    envio=envio,
+                    impuestos=impuestos,
+                    total=total,
+                    metodo_pago=metodo_pago,
+                    direccion_entrega=direccion_entrega
+                )
+                
+                if success:
+                    current_app.logger.info(f"✅ Comprobante enviado exitosamente a {email_cliente} vía Firebase Functions")
+                    return jsonify({
+                        'success': True,
+                        'message': 'Ticket de compra enviado correctamente'
+                    })
+                else:
+                    current_app.logger.warning("⚠️ Firebase Functions falló, usando Flask-Mail como respaldo")
+            except Exception as e:
+                current_app.logger.error(f"❌ Error con Firebase Functions: {str(e)}, usando Flask-Mail como respaldo", exc_info=True)
+        
+        # Respaldo: usar Flask-Mail
+        
         # Configurar método de pago
         metodo_pago_labels = {
             'tarjeta': 'Tarjeta de débito/crédito',
@@ -500,6 +538,7 @@ def enviar_ticket_compra():
             return jsonify({'error': 'Servicio de correo no disponible'}), 503
         
         mail.send(msg)
+        current_app.logger.info(f"✅ Comprobante enviado exitosamente a {email_cliente} vía Flask-Mail")
         
         return jsonify({
             'success': True,
@@ -507,7 +546,7 @@ def enviar_ticket_compra():
         })
         
     except Exception as e:
-        current_app.logger.error(f'Error enviando ticket de compra: {str(e)}')
+        current_app.logger.error(f'❌ Error enviando ticket de compra: {str(e)}', exc_info=True)
         return jsonify({
             'error': f'Error al enviar el ticket: {str(e)}'
         }), 500
