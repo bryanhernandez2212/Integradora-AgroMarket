@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nueva Solicitud de Vendedor</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #2e8b57 0%, #228B22 100%); padding: 30px; text-align: center;">
+                            <h1 style="color: #ffffff; margin: 0; font-size: 28px;">🍃 AgroMarket</h1>
+                            <p style="color: #ffffff; margin: 10px 0 0 0; font-size: 18px;">Nueva Solicitud de Vendedor</p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 30px;">
+                            <h2 style="color: #2e8b57; margin-top: 0; font-size: 22px;">Nueva Solicitud Recibida</h2>
+                            
+                            <p style="color: #333; line-height: 1.6; font-size: 16px;">
+                                Se ha recibido una nueva solicitud para ser vendedor en AgroMarket que requiere tu revisión.
+                            </p>
+                            
+                            <!-- Información del solicitante -->
+                            <div style="background-color: #e8f5e9; border-left: 4px solid #2e8b57; padding: 20px; margin: 20px 0; border-radius: 5px;">
+                                <h3 style="color: #2e8b57; margin-top: 0; font-size: 18px;">👤 Información del Solicitante</h3>
+                                <p style="color: #666; margin: 8px 0;">
+                                    <strong>Nombre:</strong> {{nombre_solicitante}}
+                                </p>
+                                <p style="color: #666; margin: 8px 0;">
+                                    <strong>Email:</strong> {{email_solicitante}}
+                                </p>
+                                <p style="color: #666; margin: 8px 0;">
+                                    <strong>Nombre de tienda:</strong> {{nombre_tienda}}
+                                </p>
+                                <p style="color: #666; margin: 8px 0;">
+                                    <strong>Ubicación:</strong> {{ubicacion}}
+                                </p>
+                                <p style="color: #666; margin: 8px 0;">
+                                    <strong>Fecha de solicitud:</strong> {{fecha_solicitud}}
+                                </p>
+                                <p style="color: #666; margin: 8px 0;">
+                                    <strong>ID de solicitud:</strong> {{solicitud_id}}
+                                </p>
+                            </div>
+                            
+                            <p style="color: #333; line-height: 1.6; font-size: 16px;">
+                                Por favor, revisa la solicitud en el panel de administración para aprobar o rechazar la solicitud.
+                            </p>
+                            
+                            <div style="text-align: center; margin: 30px 0;">
+                                <a href="#" style="background-color: #2e8b57; color: #ffffff; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                                    Revisar Solicitud
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f9f9f9; padding: 20px; text-align: center; border-top: 1px solid #e0e0e0;">
+                            <p style="color: #666; margin: 0; font-size: 12px;">
+                                AgroMarket - Sistema de Gestión
+                            </p>
+                            <p style="color: #999; margin: 10px 0 0 0; font-size: 11px;">
+                                © {{year}} AgroMarket. Todos los derechos reservados.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+

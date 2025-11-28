@@ -7,10 +7,42 @@
     let ordenFechas = 'reciente';
 
     // Inicializar Firebase
-    function inicializarFirebase() {
+    async function inicializarFirebase() {
         try {
+            // Esperar a que Firebase esté disponible
+            if (typeof firebase === 'undefined') {
+                throw new Error('Firebase SDK no está cargado');
+            }
+
+            // Intentar usar la función de inicialización global si existe
+            if (typeof window.inicializarFirebase === 'function') {
+                try {
+                    await window.inicializarFirebase();
+                } catch (e) {
+                    // Si ya está inicializado, continuar
+                    if (!e.message || !e.message.includes('already exists')) {
+                        console.warn('Error en inicializarFirebase global:', e);
+                    }
+                }
+            }
+
+            // Verificar si Firebase ya está inicializado
+            if (firebase.apps.length === 0) {
+                // Si no está inicializado, inicializarlo directamente
+                if (window.firebaseConfig) {
+                    firebase.initializeApp(window.firebaseConfig);
+                } else {
+                    throw new Error('Configuración de Firebase no disponible');
+                }
+            }
+
             auth = firebase.auth();
             db = firebase.firestore();
+
+            // Verificar que auth y db estén disponibles
+            if (!auth || !db) {
+                throw new Error('No se pudieron obtener auth o db de Firebase');
+            }
 
             auth.onAuthStateChanged((user) => {
                 if (user) {
@@ -22,9 +54,13 @@
             });
         } catch (error) {
             console.error('Error inicializando Firebase:', error);
-            document.getElementById('loading-pedidos').style.display = 'none';
-            document.getElementById('empty-pedidos').innerHTML = '<i class="fas fa-exclamation-triangle"></i><h3>Error al cargar</h3><p>Por favor, recarga la página.</p>';
-            document.getElementById('empty-pedidos').style.display = 'block';
+            const loadingEl = document.getElementById('loading-pedidos');
+            const emptyEl = document.getElementById('empty-pedidos');
+            if (loadingEl) loadingEl.style.display = 'none';
+            if (emptyEl) {
+                emptyEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i><h3>Error al cargar</h3><p>Por favor, recarga la página.</p>';
+                emptyEl.style.display = 'block';
+            }
         }
     }
 
@@ -32,8 +68,22 @@
     async function cargarPedidos() {
         try {
             if (!db || !currentUser) {
-                console.error('Firebase no inicializado');
-                return;
+                console.error('Firebase no inicializado - db:', !!db, 'currentUser:', !!currentUser);
+                // Intentar reinicializar si es necesario
+                if (!db) {
+                    if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
+                        db = firebase.firestore();
+                    } else {
+                        throw new Error('Firebase no está inicializado correctamente');
+                    }
+                }
+                if (!currentUser) {
+                    if (auth && auth.currentUser) {
+                        currentUser = auth.currentUser;
+                    } else {
+                        throw new Error('Usuario no autenticado');
+                    }
+                }
             }
 
             const loadingEl = document.getElementById('loading-pedidos');
@@ -41,9 +91,11 @@
             const containerEl = document.getElementById('pedidos-container');
 
             // Obtener todas las compras del usuario
-            // Nota: Usamos solo where() y ordenamos en JavaScript para evitar problemas con índices compuestos
+            // Limitar a 50 pedidos más recientes para mejorar el rendimiento
             const comprasSnapshot = await db.collection('compras')
                 .where('usuario_id', '==', currentUser.uid)
+                .orderBy('fecha_compra', 'desc')
+                .limit(50)
                 .get();
 
             if (comprasSnapshot.empty) {
@@ -52,10 +104,56 @@
                 return;
             }
 
-            pedidosData = [];
+            // Primero, recopilar todos los IDs de vendedores únicos que necesitamos
+            const vendedoresIds = new Set();
+            const comprasData = [];
+            
             for (const compraDoc of comprasSnapshot.docs) {
                 const compraData = compraDoc.data();
+                const productos = compraData.productos || [];
+                
+                // Recopilar IDs de vendedores que no tienen nombre
+                productos.forEach(producto => {
+                    if (!producto.vendedor_nombre && producto.vendedor_id) {
+                        vendedoresIds.add(producto.vendedor_id);
+                    }
+                });
+                
+                comprasData.push({
+                    id: compraDoc.id,
+                    data: compraData
+                });
+            }
 
+            // Cargar todos los vendedores de una vez (batch)
+            const vendedoresMap = new Map();
+            if (vendedoresIds.size > 0) {
+                const vendedoresPromises = Array.from(vendedoresIds).map(async (vendedorId) => {
+                    try {
+                        const vendedorDoc = await db.collection('usuarios').doc(vendedorId).get();
+                        if (vendedorDoc.exists) {
+                            const vendedorData = vendedorDoc.data();
+                            const vendedorNombre = vendedorData.nombre || 
+                                                   vendedorData.nombre_tienda || 
+                                                   vendedorData.email?.split('@')[0] || 
+                                                   'Vendedor';
+                            return [vendedorId, vendedorNombre];
+                        }
+                    } catch (error) {
+                        console.warn(`Error obteniendo vendedor ${vendedorId}:`, error);
+                    }
+                    return [vendedorId, 'Vendedor'];
+                });
+                
+                const vendedoresResults = await Promise.all(vendedoresPromises);
+                vendedoresResults.forEach(([id, nombre]) => {
+                    vendedoresMap.set(id, nombre);
+                });
+            }
+
+            // Ahora procesar los pedidos con los nombres de vendedores ya cargados
+            pedidosData = [];
+            for (const { id, data: compraData } of comprasData) {
                 // Manejar diferentes formatos de fecha
                 let fechaCompra = null;
                 if (compraData.fecha_compra) {
@@ -66,35 +164,24 @@
                     fechaCompra = new Date();
                 }
 
-                // Obtener nombres de vendedores para cada producto
+                // Obtener nombres de vendedores usando el mapa ya cargado
                 const productos = compraData.productos || [];
-                const productosConVendedor = await Promise.all(productos.map(async (producto) => {
+                const productosConVendedor = productos.map((producto) => {
                     let vendedorNombre = producto.vendedor_nombre || 'Vendedor';
 
-                    // Si no hay nombre del vendedor pero hay vendedor_id, buscarlo en Firestore
+                    // Si no hay nombre del vendedor pero hay vendedor_id, usar el mapa
                     if (!producto.vendedor_nombre && producto.vendedor_id) {
-                        try {
-                            const vendedorDoc = await db.collection('usuarios').doc(producto.vendedor_id).get();
-                            if (vendedorDoc.exists) {
-                                const vendedorData = vendedorDoc.data();
-                                vendedorNombre = vendedorData.nombre || 
-                                               vendedorData.nombre_tienda || 
-                                               vendedorData.email?.split('@')[0] || 
-                                               'Vendedor';
-                            }
-                        } catch (error) {
-                            console.warn('Error obteniendo nombre del vendedor:', error);
-                        }
+                        vendedorNombre = vendedoresMap.get(producto.vendedor_id) || 'Vendedor';
                     }
 
                     return {
                         ...producto,
                         vendedor_nombre: vendedorNombre
                     };
-                }));
+                });
 
                 pedidosData.push({
-                    id: compraDoc.id,
+                    id: id,
                     fecha_compra: fechaCompra,
                     fecha_creacion: compraData.fecha_creacion || fechaCompra.toISOString(),
                     productos: productosConVendedor,

@@ -1,0 +1,26 @@
+{
+  "name": "integradora-agromarket",
+  "version": "1.0.0",
+  "main": "server-stripe-template.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Noemiss13/Integradora-AgroMarket.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Noemiss13/Integradora-AgroMarket/issues"
+  },
+  "homepage": "https://github.com/Noemiss13/Integradora-AgroMarket#readme",
+  "description": "",
+  "dependencies": {
+    "firebase-admin": "^13.6.0"
+  }
+}

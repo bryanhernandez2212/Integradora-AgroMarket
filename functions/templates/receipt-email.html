@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprobante de Compra - AgroMarket</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 0;
+        }
+        .header {
+            background: linear-gradient(135deg, #2ba656 0%, #228B22 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .section {
+            background: #f8f9fa;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #2ba656;
+        }
+        .section h2 {
+            margin: 0 0 15px 0;
+            color: #2ba656;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section p {
+            margin: 8px 0;
+        }
+        .section strong {
+            color: #555;
+            min-width: 140px;
+            display: inline-block;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th {
+            background: #2ba656;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+        .text-center {
+            text-align: center;
+        }
+        .text-right {
+            text-align: right;
+        }
+        .total-section {
+            background: #e8f5e9;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 2px solid #2ba656;
+        }
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #c8e6c9;
+        }
+        .total-row:last-child {
+            border-bottom: none;
+        }
+        .total-final {
+            font-size: 22px;
+            font-weight: bold;
+            color: #2ba656;
+            border-top: 2px solid #2ba656;
+            padding-top: 15px;
+            margin-top: 10px;
+        }
+        .warning-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .warning-box p {
+            margin: 0;
+            color: #856404;
+        }
+        .footer {
+            background: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍃 AgroMarket</h1>
+            <p>Comprobante de Compra</p>
+        </div>
+        
+        <div class="content">
+            <div class="section">
+                <h2>📋 Información del Pedido</h2>
+                <p><strong>Número de pedido:</strong> {{compra_id}}</p>
+                <p><strong>Fecha:</strong> {{fecha_compra}}</p>
+                <p><strong>Método de pago:</strong> {{metodo_pago}}</p>
+            </div>
+            
+            <div class="section">
+                <h2>👤 Información del Cliente</h2>
+                <p><strong>Nombre:</strong> {{nombre_cliente}}</p>
+                <p><strong>Email:</strong> {{email_cliente}}</p>
+            </div>
+            
+            <div class="section">
+                <h2>📦 Productos Comprados</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="text-align:center; width:50px;">#</th>
+                            <th>Producto</th>
+                            <th style="text-align:center;">Cantidad</th>
+                            <th style="text-align:right;">Precio Unit.</th>
+                            <th style="text-align:right;">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{productos_html}}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="section">
+                <h2>📍 Información de Entrega</h2>
+                <p><strong>Ciudad de entrega:</strong> {{ciudad}}</p>
+                <p><strong>Teléfono de contacto:</strong> {{telefono}}</p>
+                <div class="warning-box">
+                    <p><strong>ℹ️ Importante:</strong> El conductor se comunicará contigo en el número proporcionado para coordinar la entrega.</p>
+                </div>
+            </div>
+            
+            <div class="total-section">
+                <div class="total-row">
+                    <span>Subtotal:</span>
+                    <span>${{subtotal}}</span>
+                </div>
+                <div class="total-row">
+                    <span>Envío:</span>
+                    <span>${{envio}}</span>
+                </div>
+                <div class="total-row">
+                    <span>Impuestos:</span>
+                    <span>${{impuestos}}</span>
+                </div>
+                <div class="total-row total-final">
+                    <span>TOTAL:</span>
+                    <span>${{total}}</span>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p><strong>AgroMarket</strong></p>
+                <p>Gracias por tu compra 🍃</p>
+                <p>Este es un comprobante automático, por favor guárdalo.</p>
+                <p>© {{year}} AgroMarket - Todos los derechos reservados</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+

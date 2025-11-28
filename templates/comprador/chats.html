@@ -128,55 +128,8 @@
                 <h2>Selecciona una conversación</h2>
                 <p>Elige un chat de la lista para continuar la conversación o comenzar un nuevo mensaje.</p>
             </section>
-
-            <section class="chat-conversation" id="chatConversation" style="display: none;">
-                <!-- Botón volver flotante para móvil -->
-                <a href="/comprador/chats" class="chat-back-btn-mobile" title="Volver" id="chatBackBtnMobile">
-                    <i class="fas fa-arrow-left"></i>
-                </a>
-                
-                <header class="chat-conversation-header">
-                    <div class="chat-partner">
-                        <a href="/comprador/chats" class="chat-back-btn" title="Volver" id="chatBackBtn" style="display: none;">
-                            <i class="fas fa-arrow-left"></i>
-                        </a>
-                        <div class="chat-avatar grande" id="chatPartnerAvatar"></div>
-                        <div>
-                            <h2 id="chatPartnerName"></h2>
-                            <p id="chatOrderLabel"></p>
-                        </div>
-                    </div>
-                    <div class="chat-actions">
-                        <a href="#" class="chat-action-link" id="chatOrderLink">
-                            <i class="fas fa-file-invoice"></i> Ver pedido
-                        </a>
-                        <button class="chat-action-link" disabled title="Más opciones (próximamente)" aria-label="Más opciones (próximamente)">
-                            <i class="fas fa-ellipsis-h"></i>
-                        </button>
-                    </div>
-                </header>
-
-                <div class="chat-messages" id="chatMessages" aria-live="polite">
-                    <div class="chat-loading" id="chatMessagesLoading">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <span>Cargando mensajes...</span>
-                    </div>
-                </div>
-
-                <footer class="chat-input-bar">
-                    <button class="chat-attach-btn" type="button" id="chatAttachBtn" title="Próximamente">
-                        <i class="fas fa-paperclip"></i>
-                    </button>
-                    <input type="text" placeholder="Escribe tu mensaje..." id="chatInput" autocomplete="off" />
-                    <button class="chat-send-btn" type="button" id="chatSendBtn">
-                        <i class="fas fa-paper-plane"></i>
-                        Enviar
-                    </button>
-                </footer>
-            </section>
         </div>
     </main>
     <script src="{{ url_for('static', filename='js/chat-list.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/chat-conversation.js') }}"></script>
 </body>
 </html>

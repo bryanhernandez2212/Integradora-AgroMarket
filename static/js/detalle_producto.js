@@ -261,15 +261,34 @@ function cambiarImagenPrincipal(index) {
 // Cargar información del vendedor
 async function cargarInformacionVendedor() {
     try {
+        console.log('👤 cargarInformacionVendedor - Iniciando...');
+        
+        // Verificar que db esté inicializado
+        if (!db) {
+            console.error('❌ Firestore no está disponible');
+            // Intentar obtener db desde window si está disponible
+            if (window.db) {
+                db = window.db;
+                console.log('✅ Usando db desde window');
+            } else {
+                console.error('❌ No se pudo obtener db');
+                return;
+            }
+        }
+        
         if (!productoData || !productoData.vendedor_id) {
             console.log('⚠️ No hay vendedor_id en el producto');
+            console.log('📦 productoData:', productoData);
             return;
         }
+        
+        console.log('👤 Buscando vendedor con ID:', productoData.vendedor_id);
         
         const vendedorDoc = await db.collection('usuarios').doc(productoData.vendedor_id).get();
         
         if (vendedorDoc.exists) {
             const vendedorData = vendedorDoc.data();
+            console.log('✅ Datos del vendedor cargados:', vendedorData);
             
             // Nombre del vendedor
             const nombreVendedor = vendedorData.nombre || productoData.vendedor_nombre || 'Vendedor';
@@ -337,12 +356,19 @@ async function cargarInformacionVendedor() {
             document.getElementById('sellerProducts').textContent = productosSnapshot.size;
             
         } else {
+            console.warn('⚠️ Vendedor no encontrado en Firestore, usando datos del producto como fallback');
             // Usar datos del producto como fallback
             document.getElementById('sellerName').textContent = productoData.vendedor_nombre || 'Vendedor';
         }
         
     } catch (error) {
         console.error('❌ Error cargando información del vendedor:', error);
+        console.error('❌ Stack:', error.stack);
+        // Mostrar mensaje de error en la UI
+        const sellerName = document.getElementById('sellerName');
+        if (sellerName) {
+            sellerName.textContent = productoData.vendedor_nombre || 'Vendedor no disponible';
+        }
     }
 }
 

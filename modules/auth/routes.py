@@ -6,6 +6,15 @@ import secrets
 import hashlib
 import os
 
+# Importar utilidades para Firebase Functions
+FIREBASE_FUNCTIONS_AVAILABLE = False
+try:
+    from utils.firebase_functions import send_password_reset_code_via_functions, verify_password_reset_code_via_functions
+    FIREBASE_FUNCTIONS_AVAILABLE = True
+except ImportError as e:
+    # Se inicializará después cuando current_app esté disponible
+    pass
+
 auth_bp = Blueprint("auth", __name__, template_folder="templates")
 
 # Intentar importar Firebase Admin SDK
@@ -610,11 +619,51 @@ def forgot_password():
         session['reset_password_email'] = email
         current_app.logger.info(f"💾 Email guardado en sesión: {email[:3]}***")
         
-        # Enviar correo con Flask-Mail
+        # Enviar correo con Firebase Functions (preferido) o Flask-Mail (respaldo)
         print("\n" + "=" * 60)
         print("📧 INICIANDO ENVÍO DE CORREO")
         print("=" * 60)
         
+        # Intentar usar Firebase Functions primero
+        try:
+            from utils.firebase_functions import send_password_reset_code_via_functions
+            use_firebase_functions = True
+        except ImportError:
+            use_firebase_functions = False
+        
+        if use_firebase_functions:
+            try:
+                print("🔍 Intentando enviar con Firebase Functions...")
+                # Obtener nombre del usuario si está disponible
+                nombre = None
+                try:
+                    db = get_firestore_client()
+                    if db:
+                        user_doc = db.collection('usuarios').where('email', '==', email.lower()).limit(1).get()
+                        if user_doc:
+                            nombre = user_doc[0].data().get('nombre')
+                except:
+                    pass
+                
+                success = send_password_reset_code_via_functions(
+                    email=email,
+                    code=code_data['code'],
+                    nombre=nombre
+                )
+                
+                if success:
+                    print("✅ Correo enviado exitosamente con Firebase Functions")
+                    current_app.logger.info(f"✅ Código de recuperación enviado a {email} vía Firebase Functions")
+                    flash("Se ha enviado un código de verificación a tu correo electrónico.", "success")
+                    return render_template('auth/forgot_password.html', step='code', email=email)
+                else:
+                    print("⚠️ Firebase Functions falló, intentando con Flask-Mail...")
+                    current_app.logger.warning("⚠️ Firebase Functions falló, usando Flask-Mail como respaldo")
+            except Exception as e:
+                print(f"⚠️ Error con Firebase Functions: {str(e)}")
+                current_app.logger.warning(f"⚠️ Error con Firebase Functions: {str(e)}, usando Flask-Mail como respaldo")
+        
+        # Respaldo: usar Flask-Mail
         try:
             # Obtener la instancia de Mail desde la extensión de Flask
             print("🔍 Verificando configuración de Flask-Mail...")

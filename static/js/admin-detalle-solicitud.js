@@ -360,6 +360,21 @@ async function aprobarSolicitud() {
             solicitud_vendedor_pendiente: firebase.firestore.FieldValue.delete() // Eliminar el flag
         }, { merge: true });
 
+        // Enviar correo de aprobación
+        try {
+            if (typeof enviarCorreoSolicitudAprobada === 'function') {
+                await enviarCorreoSolicitudAprobada(
+                    solicitudData.email,
+                    solicitudData.nombre || 'Usuario',
+                    solicitudData.nombre_tienda || '',
+                    solicitudData.ubicacion || ''
+                );
+            }
+        } catch (emailError) {
+            console.warn('⚠️ Error enviando correo de aprobación:', emailError);
+            // No bloquear la aprobación si falla el correo
+        }
+        
         alert('✅ Solicitud aprobada correctamente. El usuario ahora tiene rol de vendedor.');
         // Recargar la página para mostrar el nuevo estado
         window.location.reload();
@@ -400,6 +415,20 @@ async function rechazarSolicitud(motivo) {
             });
         }
 
+        // Enviar correo de rechazo
+        try {
+            if (typeof enviarCorreoSolicitudRechazada === 'function') {
+                await enviarCorreoSolicitudRechazada(
+                    solicitudData.email,
+                    solicitudData.nombre || 'Usuario',
+                    motivo
+                );
+            }
+        } catch (emailError) {
+            console.warn('⚠️ Error enviando correo de rechazo:', emailError);
+            // No bloquear el rechazo si falla el correo
+        }
+        
         alert('❌ Solicitud rechazada');
         // Recargar la página para mostrar el nuevo estado
         window.location.reload();
