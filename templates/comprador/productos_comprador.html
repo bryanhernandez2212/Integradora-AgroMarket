@@ -37,6 +37,9 @@
             <a href="{{ url_for('comprador.ver_carrito') }}" class="{% if page=='carrito' %}activo{% endif %}">
                 <span>Carrito</span>
             </a>
+            <a href="{{ url_for('comprador.mis_pedidos') }}" class="{% if page=='mis_pedidos' %}activo{% endif %}">
+                <span>Mis Pedidos</span>
+            </a>
             <a href="{{ url_for('comprador.chats') }}" class="{% if page=='chats' %}activo{% endif %}">
                 <span>Chats</span>
             </a>
@@ -71,6 +74,9 @@
             </a>
             <a href="{{ url_for('comprador.ver_carrito') }}" class="{% if page=='carrito' %}activo{% endif %}">
                 <span>Carrito</span>
+            </a>
+            <a href="{{ url_for('comprador.mis_pedidos') }}" class="{% if page=='mis_pedidos' %}activo{% endif %}">
+                <span>Mis Pedidos</span>
             </a>
             <a href="{{ url_for('comprador.chats') }}" class="{% if page=='chats' %}activo{% endif %}">
                 <span>Chats</span>

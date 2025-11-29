@@ -13,7 +13,7 @@ let auth = null;
 let db = null;
 let storage = null;
 let currentUser = null;
-let stripeReady = false;
+let stripeReady = true; // Permitir publicar productos sin validación de Stripe
 let stripeChecking = false;
 let submitButton = null;
 let stripeWarningShown = false;
@@ -43,19 +43,9 @@ function actualizarEstadoBoton() {
         return;
     }
 
-    if (stripeChecking && !stripeReady) {
-        submitButton.disabled = true;
-        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando permisos...';
-        return;
-    }
-
-    if (stripeReady) {
-        submitButton.disabled = false;
-        submitButton.innerHTML = '<i class="fas fa-upload"></i> Publicar Producto';
-    } else {
-        submitButton.disabled = true;
-        submitButton.innerHTML = '<i class="fas fa-lock"></i> Completa tu configuración de cobros';
-    }
+    // Permitir publicar productos sin validación de Stripe
+    submitButton.disabled = false;
+    submitButton.innerHTML = '<i class="fas fa-upload"></i> Publicar Producto';
 }
 
 function mostrarRestriccionStripe(mensaje) {
@@ -587,18 +577,7 @@ async function handleSubmit(event) {
     const form = event.currentTarget;
     const submitBtn = form.querySelector('.submit-btn');
 
-    if (!stripeReady) {
-        mostrarRestriccionStripe('Completa tu configuración de cobros antes de publicar productos.');
-        try {
-            if (typeof window.iniciarStripeConnectOnboarding === 'function') {
-                await window.iniciarStripeConnectOnboarding({ silent: true });
-            }
-        } catch (error) {
-            console.warn('No se pudo iniciar Stripe Connect automáticamente:', error);
-        }
-        actualizarEstadoBoton();
-        return;
-    }
+    // Validación de Stripe removida - se permite publicar productos sin cuenta de Stripe
 
     if (submitBtn) {
         submitBtn.disabled = true;
@@ -711,24 +690,10 @@ document.addEventListener('DOMContentLoaded', () => {
             currentUser = user;
             actualizarSaludoUsuario(user);
 
-            const cached = loadCachedStatus(user.uid);
-            if (cached) {
-                const status = cached.status || {};
-                stripeReady = Boolean(status.charges_enabled && status.payouts_enabled && status.details_submitted);
-                stripeStatusCache = cached;
-                stripeChecking = false;
-                actualizarEstadoBoton();
-            } else {
-                stripeReady = false;
-                stripeChecking = true;
-                actualizarEstadoBoton();
-            }
-
-            if (!cached) {
-                verificarEstadoStripe(user.uid, user.email, { showLoader: true, forceRefresh: true });
-            } else {
-                verificarEstadoStripe(user.uid, user.email, { showLoader: false, forceRefresh: true });
-            }
+            // Validación de Stripe removida - se permite publicar productos sin cuenta de Stripe
+            stripeReady = true;
+            stripeChecking = false;
+            actualizarEstadoBoton();
         });
 
         form.addEventListener('submit', handleSubmit);
@@ -736,7 +701,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('❌ Error inicializando Firebase:', error);
         mostrarMensaje('❌ Error de conexión. Recarga la página.', 'error');
         stripeChecking = false;
-        stripeReady = false;
+        stripeReady = true; // Mantener habilitado para permitir publicar productos
         actualizarEstadoBoton();
     });
 });
