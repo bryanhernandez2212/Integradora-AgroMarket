@@ -91,11 +91,10 @@
             const containerEl = document.getElementById('pedidos-container');
 
             // Obtener todas las compras del usuario
-            // Limitar a 50 pedidos más recientes para mejorar el rendimiento
+            // Nota: Ordenamos en el cliente para evitar necesidad de índice compuesto
+            // Una vez que el índice esté listo, podemos volver a usar orderBy en la consulta
             const comprasSnapshot = await db.collection('compras')
                 .where('usuario_id', '==', currentUser.uid)
-                .orderBy('fecha_compra', 'desc')
-                .limit(50)
                 .get();
 
             if (comprasSnapshot.empty) {

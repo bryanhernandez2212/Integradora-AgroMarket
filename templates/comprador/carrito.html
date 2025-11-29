@@ -38,6 +38,9 @@
             <a href="{{ url_for('comprador.ver_carrito') }}" {% if page=='carrito' %}class="activo"{% endif %}>
                 <span>Carrito</span>
             </a>
+            <a href="{{ url_for('comprador.mis_pedidos') }}" {% if page=='mis_pedidos' %}class="activo"{% endif %}>
+                <span>Mis Pedidos</span>
+            </a>
             <a href="{{ url_for('comprador.chats') }}" {% if page=='chats' %}class="activo"{% endif %}>
                 <span>Chats</span>
             </a>
@@ -72,6 +75,9 @@
             </a>
             <a href="{{ url_for('comprador.ver_carrito') }}" {% if page=='carrito' %}class="activo"{% endif %}>
                 <span>Carrito</span>
+            </a>
+            <a href="{{ url_for('comprador.mis_pedidos') }}" {% if page=='mis_pedidos' %}class="activo"{% endif %}>
+                <span>Mis Pedidos</span>
             </a>
             <a href="{{ url_for('comprador.chats') }}" {% if page=='chats' %}class="activo"{% endif %}>
                 <span>Chats</span>
@@ -192,59 +198,26 @@
                     <div class="accordion-header" onclick="toggleAccordion('pago-content')">
                         <div class="accordion-title">
                             <h3>Método de pago</h3>
-                            <p class="metodo-pago-subtitle">Selecciona tu método de pago</p>
+                            <p class="metodo-pago-subtitle">Pago con tarjeta de débito / crédito</p>
                         </div>
                         <span class="accordion-icon" id="pago-icon">▼</span>
                     </div>
                     <div class="accordion-content" id="pago-content" style="display: none;">
                         <div class="metodo-pago-options">
-                        <div class="metodo-option" data-value="efectivo">
-                            <input type="radio" id="metodo_efectivo" name="metodo_pago" value="efectivo">
-                            <label for="metodo_efectivo">
-                                <span class="metodo-icon">💵</span>
-                                <div class="metodo-info">
-                                    <span class="metodo-title">Efectivo contra entrega</span>
-                                    <span class="metodo-desc">Paga cuando recibas tu pedido</span>
-                                </div>
-                            </label>
-                        </div>
-
-                        <div class="metodo-option" data-value="transferencia">
-                            <input type="radio" id="metodo_transferencia" name="metodo_pago" value="transferencia">
-                            <label for="metodo_transferencia">
-                                <span class="metodo-icon">🏦</span>
-                                <div class="metodo-info">
-                                    <span class="metodo-title">Transferencia bancaria</span>
-                                    <span class="metodo-desc">Transferencia directa a nuestra cuenta</span>
-                                </div>
-                            </label>
-                        </div>
-
                         <div class="metodo-option" data-value="tarjeta">
-                            <input type="radio" id="metodo_tarjeta" name="metodo_pago" value="tarjeta">
+                            <input type="radio" id="metodo_tarjeta" name="metodo_pago" value="tarjeta" checked>
                             <label for="metodo_tarjeta">
                                 <span class="metodo-icon">💳</span>
                                 <div class="metodo-info">
-                                    <span class="metodo-title">Tarjeta de débito/crédito</span>
+                                    <span class="metodo-title">Tarjeta de débito / crédito</span>
                                     <span class="metodo-desc">Pago seguro con Stripe</span>
                                 </div>
                             </label>
                         </div>
                     </div>
 
-                    <!-- Mensaje para efectivo -->
-                    <div id="efectivo-mensaje" class="metodo-mensaje" style="display: none;">
-                        <div class="mensaje-info">
-                            <span class="mensaje-icon">💡</span>
-                            <div class="mensaje-content">
-                                <h4>Información importante</h4>
-                                <p>Al seleccionar pago en efectivo, deberás pagar el monto total cuando recibas tu pedido. El repartidor llevará el cambio exacto.</p>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Campos adicionales para tarjeta -->
-                    <div id="tarjeta-campos" class="tarjeta-campos" style="display: none;">
+                    <div id="tarjeta-campos" class="tarjeta-campos">
                         <div class="form-group">
                             <label for="nombre_titular">Nombre del titular</label>
                             <input type="text" id="nombre_titular" name="nombre_titular" placeholder="Nombre completo del titular" maxlength="100" required>
@@ -486,57 +459,26 @@
                     <div class="accordion-header" onclick="toggleAccordion('pago-content-din')">
                         <div class="accordion-title">
                             <h3>Método de pago</h3>
-                            <p class="metodo-pago-subtitle">Selecciona tu método de pago</p>
+                            <p class="metodo-pago-subtitle">Pago con tarjeta de débito / crédito</p>
                         </div>
                         <span class="accordion-icon" id="pago-icon-din">▼</span>
                     </div>
                     <div class="accordion-content" id="pago-content-din" style="display: none;">
                         <div class="metodo-pago-options">
-                            <div class="metodo-option" data-value="efectivo">
-                                <input type="radio" id="metodo_efectivo_din" name="metodo_pago_din" value="efectivo">
-                                <label for="metodo_efectivo_din">
-                                    <span class="metodo-icon">💵</span>
-                                    <div class="metodo-info">
-                                        <span class="metodo-title">Efectivo contra entrega</span>
-                                        <span class="metodo-desc">Paga cuando recibas tu pedido</span>
-                                    </div>
-                                </label>
-                            </div>
-                            <div class="metodo-option" data-value="transferencia">
-                                <input type="radio" id="metodo_transferencia_din" name="metodo_pago_din" value="transferencia">
-                                <label for="metodo_transferencia_din">
-                                    <span class="metodo-icon">🏦</span>
-                                    <div class="metodo-info">
-                                        <span class="metodo-title">Transferencia bancaria</span>
-                                        <span class="metodo-desc">Transferencia directa a nuestra cuenta</span>
-                                    </div>
-                                </label>
-                            </div>
                             <div class="metodo-option" data-value="tarjeta">
-                                <input type="radio" id="metodo_tarjeta_din" name="metodo_pago_din" value="tarjeta">
+                                <input type="radio" id="metodo_tarjeta_din" name="metodo_pago_din" value="tarjeta" checked>
                                 <label for="metodo_tarjeta_din">
                                     <span class="metodo-icon">💳</span>
                                     <div class="metodo-info">
-                                        <span class="metodo-title">Tarjeta de débito/crédito</span>
+                                        <span class="metodo-title">Tarjeta de débito / crédito</span>
                                         <span class="metodo-desc">Pago seguro con Stripe</span>
                                     </div>
                                 </label>
                             </div>
                         </div>
                         
-                        <!-- Mensaje para efectivo -->
-                        <div id="efectivo-mensaje-din" class="metodo-mensaje" style="display: none;">
-                            <div class="mensaje-info">
-                                <span class="mensaje-icon">💡</span>
-                                <div class="mensaje-content">
-                                    <h4>Información importante</h4>
-                                    <p>Al seleccionar pago en efectivo, deberás pagar el monto total cuando recibas tu pedido. El repartidor llevará el cambio exacto.</p>
-                                </div>
-                            </div>
-                        </div>
-                        
                         <!-- Campos adicionales para tarjeta -->
-                        <div id="tarjeta-campos-din" class="tarjeta-campos" style="display: none;">
+                        <div id="tarjeta-campos-din" class="tarjeta-campos">
                             <div class="form-group">
                                 <label for="nombre_titular_din">Nombre del titular</label>
                                 <input type="text" id="nombre_titular_din" name="nombre_titular_din" placeholder="Nombre completo del titular" maxlength="100" required>
@@ -719,33 +661,19 @@
             totalCarritoDin = total;
             console.log('💰 Total del carrito:', total);
             
-            const metodoOptions = document.querySelectorAll('input[name="metodo_pago_din"]');
             const tarjetaCampos = document.getElementById('tarjeta-campos-din');
-            const efectivoMensaje = document.getElementById('efectivo-mensaje-din');
             const stripeCardContainer = document.getElementById('stripe-card-container-din');
+            const nombreTitular = document.getElementById('nombre_titular_din');
 
-            metodoOptions.forEach(option => {
-                option.addEventListener('change', function() {
-                    if (tarjetaCampos) tarjetaCampos.style.display = 'none';
-                    if (efectivoMensaje) efectivoMensaje.style.display = 'none';
-                    if (stripeCardContainer) stripeCardContainer.style.display = 'none';
-                    
-                    const nombreTitular = document.getElementById('nombre_titular_din');
-                    if (nombreTitular) nombreTitular.required = false;
+            // Mostrar campos de tarjeta automáticamente (es el único método disponible)
+            if (tarjetaCampos) tarjetaCampos.style.display = 'block';
+            if (stripeCardContainer) stripeCardContainer.style.display = 'block';
+            if (nombreTitular) nombreTitular.required = true;
 
-                    if (this.value === 'tarjeta') {
-                        if (tarjetaCampos) tarjetaCampos.style.display = 'block';
-                        if (stripeCardContainer) stripeCardContainer.style.display = 'block';
-                        if (nombreTitular) nombreTitular.required = true;
-                        // Inicializar Stripe card element
-                        setTimeout(() => {
-                            inicializarStripeDin();
-                        }, 300);
-                    } else if (this.value === 'efectivo') {
-                        if (efectivoMensaje) efectivoMensaje.style.display = 'block';
-                    }
-                });
-            });
+            // Inicializar Stripe card element automáticamente
+            setTimeout(() => {
+                inicializarStripeDin();
+            }, 300);
         }
 
         // Inicializar Stripe para carrito dinámico con campos separados
@@ -983,19 +911,8 @@
                 return;
             }
 
-            const selectedPaymentMethod = document.querySelector('input[name="metodo_pago_din"]:checked');
-            
-            if (!selectedPaymentMethod) {
-                alert('Por favor selecciona un método de pago');
-                return;
-            }
-
-            if (selectedPaymentMethod.value === 'tarjeta') {
-                await procesarPagoStripeDin();
-            } else {
-                // Para otros métodos, procesar la compra sin Stripe
-                await procesarCompraSinStripe(selectedPaymentMethod.value);
-            }
+            // Solo procesar con tarjeta (único método disponible)
+            await procesarPagoStripeDin();
         }
 
         // Procesar pago con Stripe (carrito dinámico)
@@ -1180,7 +1097,7 @@
             }
         }
 
-        // Procesar compra sin Stripe (efectivo, transferencia)
+        // Función legacy para métodos de pago no tarjeta (ya no se usa, solo tarjeta disponible)
         async function procesarCompraSinStripe(metodoPago) {
             try {
                 // Obtener datos de dirección completa
@@ -1311,9 +1228,9 @@
                     envio: 4.50,
                     impuestos: carritoItems.reduce((acc, it) => acc + (Number(it.precio) * Number(it.cantidad)), 0) * 0.1,
                     total: totalCarritoDin,
-                    metodo_pago: metodoPago,
+                    metodo_pago: metodoPago || 'tarjeta',
                     payment_intent_id: paymentIntentId || null,
-                    estado: metodoPago === 'tarjeta' ? 'pagado' : 'pendiente',
+                    estado: 'pagado', // Solo se acepta pago con tarjeta
                     estado_pedido: 'preparando', // Estado por defecto del pedido
                     direccion_entrega: {
                         ciudad: direccionData.ciudad,
@@ -1620,26 +1537,14 @@
 
         // Manejo de formulario de pago
         document.addEventListener('DOMContentLoaded', function() {
-            const metodoOptions = document.querySelectorAll('input[name="metodo_pago"]');
             const tarjetaCampos = document.getElementById('tarjeta-campos');
-            const efectivoMensaje = document.getElementById('efectivo-mensaje');
+            const stripeCardContainer = document.getElementById('stripe-card-container');
+            const nombreTitular = document.getElementById('nombre_titular');
 
-            metodoOptions.forEach(option => {
-                option.addEventListener('change', function() {
-                    tarjetaCampos.style.display = 'none';
-                    efectivoMensaje.style.display = 'none';
-                    
-                    // Limpiar campos requeridos
-                    document.getElementById('nombre_titular').required = false;
-
-                    if (this.value === 'tarjeta') {
-                        tarjetaCampos.style.display = 'block';
-                        document.getElementById('nombre_titular').required = true;
-                    } else if (this.value === 'efectivo') {
-                        efectivoMensaje.style.display = 'block';
-                    }
-                });
-            });
+            // Mostrar campos de tarjeta automáticamente (es el único método disponible)
+            if (tarjetaCampos) tarjetaCampos.style.display = 'block';
+            if (stripeCardContainer) stripeCardContainer.style.display = 'block';
+            if (nombreTitular) nombreTitular.required = true;
 
             // Formatear número de tarjeta
             const numeroTarjeta = document.getElementById('numero_tarjeta');
@@ -1696,18 +1601,10 @@
             message.style.cursor = 'pointer';
         });
 
-        // Mostrar/ocultar campos de Stripe cuando se selecciona tarjeta
-        const metodoTarjeta = document.getElementById('metodo_tarjeta');
+        // Mostrar campos de Stripe automáticamente (solo hay método de tarjeta)
         const stripeCardContainer = document.getElementById('stripe-card-container');
-        
-        if (metodoTarjeta && stripeCardContainer) {
-            metodoTarjeta.addEventListener('change', function() {
-                if (this.checked) {
-                    stripeCardContainer.style.display = 'block';
-                } else {
-                    stripeCardContainer.style.display = 'none';
-                }
-            });
+        if (stripeCardContainer) {
+            stripeCardContainer.style.display = 'block';
         }
     </script>
 
