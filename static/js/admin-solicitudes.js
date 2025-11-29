@@ -311,18 +311,27 @@ async function aprobarSolicitud(solicitudId) {
             solicitud_vendedor_pendiente: firebase.firestore.FieldValue.delete() // Eliminar el flag si existía
         }, { merge: true });
 
-        // Enviar correo de aprobación
+        // Enviar correo de aprobación (en background, no bloquear si falla)
         try {
-            if (typeof enviarCorreoSolicitudAprobada === 'function') {
-                await enviarCorreoSolicitudAprobada(
+            console.log('📧 Intentando enviar correo de aprobación...');
+            if (typeof window.enviarCorreoSolicitudAprobada === 'function') {
+                console.log('✅ Función de correo encontrada, enviando...');
+                // Enviar en background sin esperar (fire and forget)
+                window.enviarCorreoSolicitudAprobada(
                     solicitudData.email,
                     solicitudData.nombre || 'Usuario',
                     solicitudData.nombre_tienda || '',
                     solicitudData.ubicacion || ''
-                );
+                ).then(() => {
+                    console.log('✅ Correo de aprobación enviado exitosamente');
+                }).catch((emailError) => {
+                    console.error('❌ Error enviando correo de aprobación:', emailError);
+                });
+            } else {
+                console.warn('⚠️ Función enviarCorreoSolicitudAprobada no está disponible');
             }
         } catch (emailError) {
-            console.warn('⚠️ Error enviando correo de aprobación:', emailError);
+            console.error('❌ Error al intentar enviar correo de aprobación:', emailError);
             // No bloquear la aprobación si falla el correo
         }
         
@@ -372,17 +381,26 @@ async function rechazarSolicitud(solicitudId, motivo) {
             });
         }
 
-        // Enviar correo de rechazo
+        // Enviar correo de rechazo (en background, no bloquear si falla)
         try {
-            if (typeof enviarCorreoSolicitudRechazada === 'function') {
-                await enviarCorreoSolicitudRechazada(
+            console.log('📧 Intentando enviar correo de rechazo...');
+            if (typeof window.enviarCorreoSolicitudRechazada === 'function') {
+                console.log('✅ Función de correo encontrada, enviando...');
+                // Enviar en background sin esperar (fire and forget)
+                window.enviarCorreoSolicitudRechazada(
                     solicitudData.email,
                     solicitudData.nombre || 'Usuario',
                     motivo
-                );
+                ).then(() => {
+                    console.log('✅ Correo de rechazo enviado exitosamente');
+                }).catch((emailError) => {
+                    console.error('❌ Error enviando correo de rechazo:', emailError);
+                });
+            } else {
+                console.warn('⚠️ Función enviarCorreoSolicitudRechazada no está disponible');
             }
         } catch (emailError) {
-            console.warn('⚠️ Error enviando correo de rechazo:', emailError);
+            console.error('❌ Error al intentar enviar correo de rechazo:', emailError);
             // No bloquear el rechazo si falla el correo
         }
         

@@ -8,7 +8,13 @@ service cloud.firestore {
       // También pueden leer documentos de otros usuarios (necesario para mostrar info de vendedores en productos)
       allow read: if request.auth != null;
       // Los usuarios pueden actualizar su propio documento
-      allow update: if request.auth != null && request.auth.uid == userId;
+      // Los administradores pueden actualizar cualquier documento de usuario
+      allow update: if request.auth != null && (
+                       request.auth.uid == userId ||
+                       // O el usuario es administrador
+                       (exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('rol_activo', '') == 'administrador')
+                     );
       // Solo el usuario puede crear su propio documento
       allow create: if request.auth != null && request.auth.uid == userId;
       // Permitir consultas (list) para buscar vendedores
@@ -103,14 +109,14 @@ service cloud.firestore {
       
       // Los usuarios pueden actualizar solo su propia solicitud
       // Los administradores pueden actualizar cualquier solicitud
-      // Verificar si el usuario es administrador consultando su documento
       allow update: if request.auth != null && (
                        // El usuario es el dueño de la solicitud
                        (resource.data.user_id == request.auth.uid ||
                         resource.data.usuario_id == request.auth.uid ||
                         solicitudId == request.auth.uid) ||
-                       // O el usuario es administrador
-                       get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.roles.hasAny(['administrador'])
+                       // O el usuario es administrador (verificar rol_activo)
+                       (exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('rol_activo', '') == 'administrador')
                      );
       
       // Permitir consultas (list) para administradores y usuarios buscando sus propias solicitudes
