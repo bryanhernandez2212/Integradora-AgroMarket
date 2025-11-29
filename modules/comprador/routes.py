@@ -786,6 +786,132 @@ def obtener_detalles_pago(payment_intent_id):
         current_app.logger.error(f'Error obteniendo detalles del pago: {error_msg}')
         return jsonify({'error': 'Error al obtener los detalles del pago'}), 500
 
+# ===== API: Enviar correo de cambio de estado de pedido =====
+@comprador.route("/api/enviar-correo-cambio-estado", methods=["POST"])
+def api_enviar_correo_cambio_estado():
+    """API para enviar correo cuando cambia el estado de un pedido"""
+    try:
+        current_app.logger.info('📧 Recibida petición para enviar correo de cambio de estado')
+        
+        data = request.get_json()
+        if not data:
+            current_app.logger.error('❌ No se recibieron datos JSON')
+            return jsonify({'success': False, 'error': 'No se recibieron datos'}), 400
+            
+        email = data.get('email')
+        nombre = data.get('nombre', 'Cliente')
+        compra_id = data.get('compraId') or data.get('compra_id', '')
+        nuevo_estado = data.get('nuevoEstado') or data.get('nuevo_estado', '')
+        estado_anterior = data.get('estadoAnterior') or data.get('estado_anterior', '')
+        productos = data.get('productos', [])
+        vendedor_nombre = data.get('vendedorNombre') or data.get('vendedor_nombre', 'Vendedor')
+        fecha_actualizacion = data.get('fechaActualizacion') or data.get('fecha_actualizacion', '')
+        
+        current_app.logger.info(f'📧 Datos recibidos: email={email}, compra_id={compra_id}, nuevo_estado={nuevo_estado}')
+        
+        if not email or not compra_id or not nuevo_estado:
+            return jsonify({
+                'success': False,
+                'error': 'Email, compraId y nuevoEstado son requeridos'
+            }), 400
+        
+        # Obtener la instancia de Mail
+        mail = current_app.extensions.get('mail')
+        if not mail:
+            return jsonify({
+                'success': False,
+                'error': 'Servicio de correo no disponible'
+            }), 503
+        
+        # Mapeo de estados
+        estado_labels = {
+            'preparando': 'Preparando',
+            'enviado': 'Enviado',
+            'recibido': 'Recibido',
+            'cancelado': 'Cancelado'
+        }
+        
+        estado_label = estado_labels.get(nuevo_estado.lower(), nuevo_estado)
+        estado_anterior_label = estado_labels.get(estado_anterior.lower(), estado_anterior) if estado_anterior else 'N/A'
+        
+        # Construir lista de productos
+        productos_html = ''
+        if productos and isinstance(productos, list) and len(productos) > 0:
+            productos_html = ''.join([
+                f'<li>{p.get("nombre", "Producto")} - {p.get("cantidad", 0)} {p.get("unidad", "kg")}</li>'
+                for p in productos
+            ])
+        else:
+            productos_html = '<li>No hay productos especificados</li>'
+        
+        # Crear el HTML del correo (simplificado)
+        html_body = f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #2e8b57 0%, #228B22 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
+                .header h1 {{ margin: 0; font-size: 28px; }}
+                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }}
+                .section {{ background: white; padding: 30px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }}
+                .section h2 {{ color: #2e8b57; margin-top: 0; font-size: 22px; }}
+                .mensaje-principal {{ color: #333; font-size: 18px; margin: 20px 0; line-height: 1.8; }}
+                .estado-destacado {{ color: #2e8b57; font-size: 24px; font-weight: bold; margin: 20px 0; }}
+                .footer {{ text-align: center; margin-top: 30px; color: #666; font-size: 12px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🍃 AgroMarket</h1>
+                    <p style="margin: 10px 0 0 0; font-size: 18px;">Actualización de Estado de Pedido</p>
+                </div>
+                
+                <div class="content">
+                    <div class="section">
+                        <h2>Hola {nombre},</h2>
+                        <p class="mensaje-principal">
+                            Actualización de estado del pedido <strong>#{compra_id[:9].upper()}</strong> a <span class="estado-destacado">{estado_label}</span>
+                        </p>
+                        <p style="color: #666; font-size: 14px; margin-top: 30px;">
+                            Puedes ver el estado completo de tu pedido en cualquier momento desde tu cuenta en AgroMarket.
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    <p>© {data.get('year', '2024')} AgroMarket. Todos los derechos reservados.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        '''
+        
+        # Crear y enviar el correo
+        msg = Message(
+            subject=f'📦 Actualización de Pedido #{compra_id[:9].upper()} - {estado_label}',
+            recipients=[email],
+            html=html_body
+        )
+        
+        mail.send(msg)
+        current_app.logger.info(f"✅ Correo de cambio de estado enviado a {email}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Correo de cambio de estado enviado correctamente'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'❌ Error enviando correo de cambio de estado: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': f'Error al enviar correo: {str(e)}'
+        }), 500
+
 
 # ===== Verificar estado de devolución =====
 @comprador.route("/verificar-devolucion/<string:refund_id>", methods=["GET"])

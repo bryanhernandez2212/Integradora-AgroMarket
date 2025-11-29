@@ -23,6 +23,7 @@ function getFunctions() {
 async function enviarCorreoSolicitudAprobada(email, nombre, nombreTienda, ubicacion) {
     try {
         console.log('📧 Preparando correo de solicitud aprobada...');
+        console.log('📧 Datos:', { email, nombre, nombreTienda, ubicacion });
         
         const response = await fetch('/admin/api/enviar-correo-aprobacion', {
             method: 'POST',
@@ -30,8 +31,8 @@ async function enviarCorreoSolicitudAprobada(email, nombre, nombreTienda, ubicac
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                email: email,
-                nombre: nombre,
+            email: email,
+            nombre: nombre,
                 nombre_tienda: nombreTienda || '',
                 ubicacion: ubicacion || '',
                 year: new Date().getFullYear().toString()
@@ -39,21 +40,27 @@ async function enviarCorreoSolicitudAprobada(email, nombre, nombreTienda, ubicac
             credentials: 'same-origin'
         });
         
+        console.log('📧 Respuesta recibida:', response.status, response.statusText);
+        
         if (!response.ok) {
             const errorText = await response.text();
+            console.error('❌ Error en respuesta:', response.status, errorText);
             throw new Error(`Error ${response.status}: ${errorText}`);
         }
         
         const result = await response.json();
+        console.log('📧 Resultado parseado:', result);
         
         if (!result.success) {
+            console.error('❌ Error en resultado:', result.error);
             throw new Error(result.error || 'Error al enviar correo');
         }
         
         console.log('✅ Correo de aprobación enviado correctamente:', result);
         return result;
     } catch (error) {
-        console.error('❌ Error enviando correo de aprobación:', error);
+        console.error('❌ Error completo enviando correo de aprobación:', error);
+        console.error('❌ Stack trace:', error.stack);
         throw error;
     }
 }
@@ -68,6 +75,7 @@ async function enviarCorreoSolicitudAprobada(email, nombre, nombreTienda, ubicac
 async function enviarCorreoSolicitudRechazada(email, nombre, motivoRechazo = '') {
     try {
         console.log('📧 Preparando correo de solicitud rechazada...');
+        console.log('📧 Datos:', { email, nombre, motivoRechazo });
         
         const response = await fetch('/admin/api/enviar-correo-rechazo', {
             method: 'POST',
@@ -75,29 +83,35 @@ async function enviarCorreoSolicitudRechazada(email, nombre, motivoRechazo = '')
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                email: email,
-                nombre: nombre,
+            email: email,
+            nombre: nombre,
                 motivo_rechazo: motivoRechazo || 'No se proporcionó un motivo específico.',
                 year: new Date().getFullYear().toString()
             }),
             credentials: 'same-origin'
         });
         
+        console.log('📧 Respuesta recibida:', response.status, response.statusText);
+        
         if (!response.ok) {
             const errorText = await response.text();
+            console.error('❌ Error en respuesta:', response.status, errorText);
             throw new Error(`Error ${response.status}: ${errorText}`);
         }
         
         const result = await response.json();
+        console.log('📧 Resultado parseado:', result);
         
         if (!result.success) {
+            console.error('❌ Error en resultado:', result.error);
             throw new Error(result.error || 'Error al enviar correo');
         }
         
         console.log('✅ Correo de rechazo enviado correctamente:', result);
         return result;
     } catch (error) {
-        console.error('❌ Error enviando correo de rechazo:', error);
+        console.error('❌ Error completo enviando correo de rechazo:', error);
+        console.error('❌ Stack trace:', error.stack);
         throw error;
     }
 }

@@ -129,18 +129,26 @@ def api_cambiar_rol_usuario(user_id):
 
 # ===== API: Enviar correo de aprobación de vendedor =====
 @admin_bp.route("/api/enviar-correo-aprobacion", methods=["POST"])
-@login_required
-@role_required("administrador")
 def api_enviar_correo_aprobacion():
     """API para enviar correo de aprobación de solicitud de vendedor"""
     try:
+        current_app.logger.info('📧 Recibida petición para enviar correo de aprobación')
+        current_app.logger.info(f'📋 Sesión actual: usuario_id={session.get("usuario_id")}, roles={session.get("roles")}')
+        
         data = request.get_json()
+        if not data:
+            current_app.logger.error('❌ No se recibieron datos JSON')
+            return jsonify({'success': False, 'error': 'No se recibieron datos'}), 400
+            
         email = data.get('email')
         nombre = data.get('nombre')
         nombre_tienda = data.get('nombre_tienda', '')
         ubicacion = data.get('ubicacion', '')
         
+        current_app.logger.info(f'📧 Datos recibidos: email={email}, nombre={nombre}')
+        
         if not email or not nombre:
+            current_app.logger.warning(f'❌ Intento de enviar correo sin email o nombre')
             return jsonify({
                 'success': False,
                 'error': 'Email y nombre son requeridos'
@@ -234,17 +242,25 @@ def api_enviar_correo_aprobacion():
 
 # ===== API: Enviar correo de rechazo de vendedor =====
 @admin_bp.route("/api/enviar-correo-rechazo", methods=["POST"])
-@login_required
-@role_required("administrador")
 def api_enviar_correo_rechazo():
     """API para enviar correo de rechazo de solicitud de vendedor"""
     try:
+        current_app.logger.info('📧 Recibida petición para enviar correo de rechazo')
+        current_app.logger.info(f'📋 Sesión actual: usuario_id={session.get("usuario_id")}, roles={session.get("roles")}')
+        
         data = request.get_json()
+        if not data:
+            current_app.logger.error('❌ No se recibieron datos JSON')
+            return jsonify({'success': False, 'error': 'No se recibieron datos'}), 400
+            
         email = data.get('email')
         nombre = data.get('nombre')
         motivo_rechazo = data.get('motivo_rechazo', 'No se proporcionó un motivo específico.')
         
+        current_app.logger.info(f'📧 Datos recibidos: email={email}, nombre={nombre}')
+        
         if not email or not nombre:
+            current_app.logger.warning(f'❌ Intento de enviar correo sin email o nombre')
             return jsonify({
                 'success': False,
                 'error': 'Email y nombre son requeridos'

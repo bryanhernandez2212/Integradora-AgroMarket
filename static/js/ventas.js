@@ -1043,14 +1043,6 @@ async function enviarCorreoCambioEstado(compraData, nuevoEstado, estadoAnterior,
             estadoAnterior: estadoAnterior
         });
         
-        // Verificar si Firebase Functions está disponible
-        if (typeof firebase === 'undefined' || !firebase.functions) {
-            console.warn('⚠️ Firebase Functions no está disponible');
-            return;
-        }
-        
-        const functions = firebase.functions();
-        
         // Obtener datos del cliente
         const emailCliente = compraData.usuario_email || '';
         const nombreCliente = compraData.usuario_nombre || 'Cliente';
@@ -1095,10 +1087,14 @@ async function enviarCorreoCambioEstado(compraData, nuevoEstado, estadoAnterior,
             vendedorNombre: vendedorNombre
         });
         
-        // Llamar a la Firebase Function (sintaxis v8)
-        const sendOrderStatusChangeEmail = functions.httpsCallable('sendOrderStatusChangeEmail');
-        
-        const result = await sendOrderStatusChangeEmail({
+        // Enviar correo usando Flask-Mail directamente
+        console.log('📧 Enviando correo vía Flask-Mail...');
+        const response = await fetch('/comprador/api/enviar-correo-cambio-estado', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
             email: emailCliente,
             nombre: nombreCliente,
             compraId: compraId,
@@ -1106,13 +1102,26 @@ async function enviarCorreoCambioEstado(compraData, nuevoEstado, estadoAnterior,
             estadoAnterior: estadoAnterior,
             productos: productos,
             vendedorNombre: vendedorNombre,
-            fechaActualizacion: new Date().toLocaleString('es-MX')
+                fechaActualizacion: new Date().toLocaleString('es-MX'),
+                year: new Date().getFullYear().toString()
+            }),
+            credentials: 'same-origin'
         });
 
-        if (result && result.data && result.data.success) {
-            console.log('✅ Correo de cambio de estado enviado exitosamente:', result.data);
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Error en respuesta:', response.status, errorText);
+            throw new Error(`Error ${response.status}: ${errorText}`);
+        }
+        
+        const result = await response.json();
+        console.log('📧 Resultado:', result);
+        
+        if (result.success) {
+            console.log('✅ Correo de cambio de estado enviado exitosamente:', result);
         } else {
-            console.warn('⚠️ Error en respuesta de Firebase Function:', result);
+            console.warn('⚠️ Error en respuesta:', result.error);
+            throw new Error(result.error || 'Error al enviar correo');
         }
     } catch (error) {
         console.error('❌ Error enviando correo de cambio de estado:', error);

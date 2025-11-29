@@ -663,17 +663,17 @@
             
             const tarjetaCampos = document.getElementById('tarjeta-campos-din');
             const stripeCardContainer = document.getElementById('stripe-card-container-din');
-            const nombreTitular = document.getElementById('nombre_titular_din');
+                    const nombreTitular = document.getElementById('nombre_titular_din');
 
             // Mostrar campos de tarjeta automáticamente (es el único método disponible)
-            if (tarjetaCampos) tarjetaCampos.style.display = 'block';
-            if (stripeCardContainer) stripeCardContainer.style.display = 'block';
-            if (nombreTitular) nombreTitular.required = true;
+                        if (tarjetaCampos) tarjetaCampos.style.display = 'block';
+                        if (stripeCardContainer) stripeCardContainer.style.display = 'block';
+                        if (nombreTitular) nombreTitular.required = true;
 
             // Inicializar Stripe card element automáticamente
-            setTimeout(() => {
-                inicializarStripeDin();
-            }, 300);
+                        setTimeout(() => {
+                            inicializarStripeDin();
+                        }, 300);
         }
 
         // Inicializar Stripe para carrito dinámico con campos separados
@@ -912,7 +912,7 @@
             }
 
             // Solo procesar con tarjeta (único método disponible)
-            await procesarPagoStripeDin();
+                await procesarPagoStripeDin();
         }
 
         // Procesar pago con Stripe (carrito dinámico)
@@ -1604,7 +1604,7 @@
         // Mostrar campos de Stripe automáticamente (solo hay método de tarjeta)
         const stripeCardContainer = document.getElementById('stripe-card-container');
         if (stripeCardContainer) {
-            stripeCardContainer.style.display = 'block';
+                    stripeCardContainer.style.display = 'block';
         }
     </script>
 
