@@ -181,9 +181,28 @@ function mostrarProducto() {
     document.getElementById('productCategory').textContent = categoria.charAt(0).toUpperCase() + categoria.slice(1);
     document.getElementById('breadcrumb-category').textContent = categoria.charAt(0).toUpperCase() + categoria.slice(1);
     
-    // Precio
-    const precio = productoData.precio || 0;
-    document.getElementById('productPrice').textContent = `$${precio.toFixed(2)} MXN`;
+    // Precio con descuento
+    const precioOriginal = productoData.precio || 0;
+    const descuento = productoData.descuento || 0;
+    const precioConDescuento = descuento > 0 && precioOriginal > 0 
+        ? precioOriginal * (1 - descuento / 100) 
+        : null;
+    
+    const priceElement = document.getElementById('productPrice');
+    if (descuento > 0 && precioConDescuento) {
+        priceElement.innerHTML = `
+            <div class="price-with-discount">
+                <div class="price-row">
+                    <span class="price-original-discounted">$${precioOriginal.toFixed(2)}</span>
+                    <span class="price-discounted">$${precioConDescuento.toFixed(2)} MXN</span>
+                    <span class="discount-badge">-${descuento}%</span>
+                </div>
+                <div class="savings-amount">Ahorras $${(precioOriginal - precioConDescuento).toFixed(2)}</div>
+            </div>
+        `;
+    } else {
+        priceElement.innerHTML = `<span class="price-value">$${precioOriginal.toFixed(2)} MXN</span>`;
+    }
     
     // Stock
     const stock = productoData.stock || 0;
@@ -969,10 +988,19 @@ async function agregarAlCarrito() {
                 stock_actual: stockActual
             });
             
+            // Calcular precio final (con descuento si existe)
+            const precioOriginal = productoDataActual.precio || 0;
+            const descuento = productoDataActual.descuento || 0;
+            const precioFinal = descuento > 0 && precioOriginal > 0 
+                ? precioOriginal * (1 - descuento / 100) 
+                : precioOriginal;
+            
             const itemCarrito = {
                 producto_id: productoId,
                 nombre: productoDataActual.nombre,
-                precio: productoDataActual.precio,
+                precio: precioFinal,
+                precio_original: precioOriginal,
+                descuento: descuento > 0 ? descuento : null,
                 cantidad: quantity,
                 unidad: productoDataActual.unidad || 'kg',
                 imagen: imagenes[0] || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgZmlsbD0iI2Y4ZjlmYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjQiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5TaW4gaW1hZ2VuPC90ZXh0Pjwvc3ZnPg==',

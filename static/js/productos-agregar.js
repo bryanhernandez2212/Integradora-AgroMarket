@@ -144,8 +144,9 @@ function obtenerDatosFormulario() {
     const unidad = (document.getElementById('unidad')?.value || '').toLowerCase();
     const precio = parseFloat(document.getElementById('precio')?.value || '');
     const stock = parseInt(document.getElementById('stock')?.value || '');
+    const descuento = parseFloat(document.getElementById('descuento')?.value || 0) || 0;
 
-    return { nombre, descripcion, categoria, unidad, precio, stock };
+    return { nombre, descripcion, categoria, unidad, precio, stock, descuento };
 }
 
 function validarDatosProducto(datos) {
@@ -187,6 +188,13 @@ function validarDatosProducto(datos) {
     if (Number.isNaN(datos.precio) || datos.precio <= 0) return 'El precio debe ser un número mayor a 0';
     if (Number.isNaN(datos.stock) || datos.stock <= 0) return 'La cantidad debe ser un número mayor a 0';
     if (datos.unidad === 'kg' && datos.stock < 5) return 'El mínimo son 5 kg. No se permiten valores menores.';
+    
+    // Validar descuento
+    if (datos.descuento !== undefined && datos.descuento !== null) {
+        if (Number.isNaN(datos.descuento) || datos.descuento < 0 || datos.descuento > 100) {
+            return 'El descuento debe ser un número entre 0 y 100';
+        }
+    }
 
     return null;
 }
@@ -210,12 +218,19 @@ async function guardarProducto(datos) {
         ? SecurityValidation.sanitizeString(datos.unidad, 20) 
         : datos.unidad;
 
+    // Calcular precio con descuento
+    const descuento = datos.descuento || 0;
+    const precioOriginal = datos.precio;
+    const precioConDescuento = descuento > 0 ? precioOriginal * (1 - descuento / 100) : precioOriginal;
+
     const producto = {
         nombre: nombre,
         descripcion: descripcion,
         categoria: categoria,
         unidad: unidad,
-        precio: datos.precio,
+        precio: precioOriginal,
+        precio_con_descuento: descuento > 0 ? precioConDescuento : null,
+        descuento: descuento > 0 ? descuento : 0,
         stock: datos.stock,
         vendedor_id: currentUser.uid,
         vendedor_email: currentUser.email,
@@ -599,7 +614,36 @@ function setupValidaciones() {
             }
         });
 
+        // Función para calcular y mostrar precio con descuento
+        function actualizarPrecioConDescuento() {
+            const precioInput = document.getElementById('precio');
+            const descuentoInput = document.getElementById('descuento');
+            const precioConDescuentoDiv = document.getElementById('precio-con-descuento');
+            const precioDescuentoValor = document.getElementById('precio-descuento-valor');
+            
+            if (!precioInput || !descuentoInput || !precioConDescuentoDiv || !precioDescuentoValor) return;
+            
+            const precio = parseFloat(precioInput.value) || 0;
+            const descuento = parseFloat(descuentoInput.value) || 0;
+            
+            if (precio > 0 && descuento > 0 && descuento <= 100) {
+                const precioFinal = precio * (1 - descuento / 100);
+                precioDescuentoValor.textContent = precioFinal.toFixed(2);
+                precioConDescuentoDiv.style.display = 'block';
+            } else {
+                precioConDescuentoDiv.style.display = 'none';
+            }
+        }
+        
+        // Agregar event listeners para calcular descuento en tiempo real
+        const descuentoInput = document.getElementById('descuento');
+        if (descuentoInput) {
+            descuentoInput.addEventListener('input', actualizarPrecioConDescuento);
+            descuentoInput.addEventListener('change', actualizarPrecioConDescuento);
+        }
+        
         precioInput.addEventListener('input', () => {
+            actualizarPrecioConDescuento();
             const precio = parseFloat(precioInput.value || '');
             if (!Number.isNaN(precio) && precio > 0) {
                 precioError.style.display = 'none';

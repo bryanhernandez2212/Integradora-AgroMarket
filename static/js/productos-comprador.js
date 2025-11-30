@@ -9,7 +9,8 @@
     let filtrosActivos = {
         categorias: [],
         unidades: [],
-        stock: true
+        stock: true,
+        descuento: false
     };
 
     const rawCategoria = (document.body?.dataset?.categoria || '').trim();
@@ -133,10 +134,19 @@
                     }
                 }
 
+                // Calcular precio con descuento si existe
+                const precioOriginal = data.precio || 0;
+                const descuento = data.descuento || 0;
+                const precioConDescuento = descuento > 0 && precioOriginal > 0 
+                    ? precioOriginal * (1 - descuento / 100) 
+                    : null;
+                
                 productos.push({
                     id: doc.id,
                     nombre: data.nombre || 'Sin nombre',
-                    precio: data.precio || 0,
+                    precio: precioOriginal,
+                    precio_con_descuento: precioConDescuento,
+                    descuento: descuento,
                     categoria: data.categoria || 'otros',
                     stock: data.stock || 0,
                     unidad: data.unidad || 'kg',
@@ -170,9 +180,17 @@
             const productosOrdenados = [...productosParaOrdenar];
 
             if (ordenActual === 'precio-asc') {
-                productosOrdenados.sort((a, b) => (a.precio || 0) - (b.precio || 0));
+                productosOrdenados.sort((a, b) => {
+                    const precioA = a.precio_con_descuento || a.precio || 0;
+                    const precioB = b.precio_con_descuento || b.precio || 0;
+                    return precioA - precioB;
+                });
             } else if (ordenActual === 'precio-desc') {
-                productosOrdenados.sort((a, b) => (b.precio || 0) - (a.precio || 0));
+                productosOrdenados.sort((a, b) => {
+                    const precioA = a.precio_con_descuento || a.precio || 0;
+                    const precioB = b.precio_con_descuento || b.precio || 0;
+                    return precioB - precioA;
+                });
             }
 
             return productosOrdenados;
@@ -202,7 +220,7 @@
                     <article class="producto-card-small" 
                          data-id="${producto.id}" 
                          data-nombre="${producto.nombre}" 
-                         data-precio="${producto.precio}"
+                         data-precio="${producto.precio_con_descuento || producto.precio}"
                          data-categoria="${producto.categoria}"
                          data-stock="${producto.stock}">
                     
@@ -224,7 +242,18 @@
                                 <h4 class="producto-nombre-small">${producto.nombre}</h4>
                             
                                 <div class="producto-precio-small">
-                                $${producto.precio.toFixed(2)} / ${producto.unidad}
+                                ${producto.descuento > 0 && producto.precio_con_descuento ? `
+                                    <div class="precio-con-descuento-card">
+                                        <div class="precio-row-card">
+                                            <span class="precio-original-card">$${producto.precio.toFixed(2)}</span>
+                                            <span class="precio-final-card">$${producto.precio_con_descuento.toFixed(2)}</span>
+                                            <span class="badge-descuento-card">-${producto.descuento}%</span>
+                                        </div>
+                                        <span class="precio-unidad-card">/ ${producto.unidad}</span>
+                                    </div>
+                                ` : `
+                                    $${producto.precio.toFixed(2)} / ${producto.unidad}
+                                `}
                             </div>
                             
                                 <div class="producto-stock-small">
@@ -397,6 +426,13 @@
             );
         }
 
+        // Filtrar por descuento (solo productos con descuento)
+        if (filtrosActivos.descuento) {
+            productosFiltrados = productosFiltrados.filter(producto => 
+                producto.descuento > 0 && producto.precio_con_descuento !== null
+            );
+        }
+
         mostrarProductos(productosFiltrados);
     }
 
@@ -434,6 +470,10 @@
         // Manejar filtro de stock
         else if (filterValue === 'stock') {
             filtrosActivos.stock = estaActivo;
+        }
+        // Manejar filtro de descuento
+        else if (filterValue === 'descuento') {
+            filtrosActivos.descuento = estaActivo;
         }
 
         aplicarFiltros();
@@ -767,10 +807,17 @@
                     // Si no existe, crear nuevo item
                     const vendedorId = productoActual?.vendedor_id || productoActual?.vendedorId || '';
                     
+                    // Calcular precio final (con descuento si existe)
+                    const precioOriginal = producto.precio || 0;
+                    const descuento = producto.descuento || 0;
+                    const precioFinal = producto.precio_con_descuento || precioOriginal;
+                    
                     const itemCarrito = {
                         producto_id: productoId,
                         nombre: producto.nombre,
-                        precio: producto.precio,
+                        precio: precioFinal,
+                        precio_original: precioOriginal,
+                        descuento: descuento > 0 ? descuento : null,
                         cantidad: cantidad,
                         unidad: producto.unidad,
                         imagen: producto.imagen || '',

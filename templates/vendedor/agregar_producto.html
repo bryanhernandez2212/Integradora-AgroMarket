@@ -177,6 +177,18 @@
                         </div>
                     </div>
                     <div class="form-group">
+                        <label for="descuento">Descuento (%):</label>
+                        <input type="number" id="descuento" name="descuento" min="0" max="100" step="1" placeholder="0" value="0">
+                        <small style="color: #666; font-size: 0.85rem; display: block; margin-top: 0.25rem;">
+                            <i class="fas fa-info-circle"></i> Opcional: porcentaje de descuento (0-100)
+                        </small>
+                        <div id="precio-con-descuento" style="display: none; margin-top: 0.5rem; padding: 0.5rem; background: #e8f5e9; border-radius: 4px; font-size: 0.9rem;">
+                            <strong style="color: #2e8b57;">Precio con descuento: $<span id="precio-descuento-valor">0.00</span></strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
                         <label for="stock">Cantidad disponible:</label>
                         <input type="number" id="stock" name="stock" min="1" step="1" placeholder="100" required>
                         <div id="stock-mensaje" class="stock-mensaje" style="display: none;">

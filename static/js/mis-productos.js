@@ -266,7 +266,12 @@ function renderProducts(productos) {
             const descripcion = producto.descripcion || 'Sin descripción';
             const categoria = capitalizar(producto.categoria || 'Sin categoría');
             const unidad = capitalizar(producto.unidad || 'Sin unidad');
-            const precio = Number(producto.precio) || 0;
+            const precioOriginal = Number(producto.precio) || 0;
+            const descuento = Number(producto.descuento) || 0;
+            const precioConDescuento = descuento > 0 && precioOriginal > 0 
+                ? precioOriginal * (1 - descuento / 100) 
+                : null;
+            const precio = precioConDescuento || precioOriginal;
             const stock = Number(producto.stock) || 0;
             const imagenUrl = producto.imagenUrl || null;
             const activo = producto.activo !== false;
@@ -300,7 +305,23 @@ function renderProducts(productos) {
                         </div>
                         <div class="product-card-field">
                             <span class="product-card-label">Precio</span>
-                            <span class="product-card-value price">$ ${precio.toFixed(2)}</span>
+                            <span class="product-card-value price">
+                                ${descuento > 0 && precioConDescuento ? `
+                                    <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+                                        <span style="text-decoration: line-through; color: #999; font-size: 0.85em;">
+                                            $${precioOriginal.toFixed(2)}
+                                        </span>
+                                        <span style="color: #dc3545; font-weight: bold;">
+                                            $${precioConDescuento.toFixed(2)}
+                                        </span>
+                                        <span style="background: #dc3545; color: white; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.7em; display: inline-block; width: fit-content;">
+                                            -${descuento}%
+                                        </span>
+                                    </div>
+                                ` : `
+                                    $ ${precio.toFixed(2)}
+                                `}
+                            </span>
                         </div>
                         <div class="product-card-field">
                             <span class="product-card-label">Stock</span>
@@ -335,7 +356,12 @@ function renderProducts(productos) {
             const descripcion = producto.descripcion || 'Sin descripción';
             const categoria = capitalizar(producto.categoria || 'Sin categoría');
             const unidad = capitalizar(producto.unidad || 'Sin unidad');
-            const precio = Number(producto.precio) || 0;
+            const precioOriginal = Number(producto.precio) || 0;
+            const descuento = Number(producto.descuento) || 0;
+            const precioConDescuento = descuento > 0 && precioOriginal > 0 
+                ? precioOriginal * (1 - descuento / 100) 
+                : null;
+            const precio = precioConDescuento || precioOriginal;
             const stock = Number(producto.stock) || 0;
             const imagenUrl = producto.imagenUrl || null;
             const activo = producto.activo !== false;
@@ -360,7 +386,23 @@ function renderProducts(productos) {
                         </div>
                     </td>
                     <td><span class="category-badge">${categoria}</span></td>
-                    <td class="product-price">$ ${precio.toFixed(2)}</td>
+                    <td class="product-price">
+                        ${descuento > 0 && precioConDescuento ? `
+                            <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                                <span style="text-decoration: line-through; color: #999; font-size: 0.85em;">
+                                    $${precioOriginal.toFixed(2)}
+                                </span>
+                                <span style="color: #dc3545; font-weight: bold;">
+                                    $${precioConDescuento.toFixed(2)}
+                                </span>
+                                <span style="background: #dc3545; color: white; padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.7em; display: inline-block; width: fit-content;">
+                                    -${descuento}%
+                                </span>
+                            </div>
+                        ` : `
+                            $ ${precioOriginal.toFixed(2)}
+                        `}
+                    </td>
                     <td>${stock}</td>
                     <td>${unidad}</td>
                     <td><span class="status-pill ${activo ? 'active' : 'paused'}">${statusLabel}</span></td>
