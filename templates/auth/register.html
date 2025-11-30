@@ -18,7 +18,7 @@
                 </div>
                 <h2>¡Únete a nuestra comunidad!</h2>
                 <p>Conecta con productores locales y encuentra los mejores productos frescos del campo</p>
-                <a href="/login" class="btn-switch">Ya tengo cuenta</a>
+                <a href="{{ url_for('auth.login') }}" class="btn-switch">Ya tengo cuenta</a>
             </div>
         </div>
 
@@ -155,6 +155,11 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-functions.js"></script>
     <script src="/static/js/firebase-config.js"></script>
+    
+    <!-- Security Validation -->
+    <script src="{{ url_for('static', filename='js/security-validation.js') }}"></script>
+    <!-- Email Helper -->
+    <script src="{{ url_for('static', filename='js/email-helper.js') }}"></script>
 
     <script>
         console.log('📄 Página de registro cargada (solo vista)');
@@ -235,16 +240,109 @@
                 e.preventDefault();
                 try {
                     // Validaciones básicas
-                    const nombre = document.getElementById('nombre')?.value?.trim();
-                    const email = document.getElementById('email')?.value?.trim();
+                    let nombre = document.getElementById('nombre')?.value?.trim();
+                    let email = document.getElementById('email')?.value?.trim();
                     const password = document.getElementById('password')?.value || '';
-                    const rol = document.getElementById('rol')?.value;
-                    const nombreTienda = document.getElementById('nombre_tienda')?.value?.trim();
-                    const ubicacion = document.getElementById('ubicacion')?.value?.trim();
+                    let rol = document.getElementById('rol')?.value;
+                    let nombreTienda = document.getElementById('nombre_tienda')?.value?.trim();
+                    let ubicacion = document.getElementById('ubicacion')?.value?.trim();
 
                     if (!nombre || !email || !password || !rol) {
                         alert('Completa todos los campos');
                         return;
+                    }
+                    
+                    // Validación de seguridad
+                    if (typeof SecurityValidation !== 'undefined') {
+                        // Validar nombre
+                        if (!SecurityValidation.validateName(nombre, 2, 100)) {
+                            alert('El nombre debe tener entre 2 y 100 caracteres y solo contener letras, espacios, guiones y apóstrofes');
+                            return;
+                        }
+                        
+                        if (SecurityValidation.detectXSS(nombre)) {
+                            console.warn('⚠️ Intento de XSS detectado en nombre');
+                            alert('El nombre contiene caracteres no permitidos. Por favor, usa solo texto normal.');
+                            return;
+                        }
+                        
+                        nombre = SecurityValidation.sanitizeString(nombre, 100);
+                        
+                        // Validar email
+                        if (!SecurityValidation.validateEmail(email)) {
+                            alert('Por favor, ingresa un correo electrónico válido');
+                            return;
+                        }
+                        
+                        if (SecurityValidation.detectXSS(email)) {
+                            console.warn('⚠️ Intento de XSS detectado en email');
+                            alert('El correo electrónico contiene caracteres no permitidos');
+                            return;
+                        }
+                        
+                        email = email.toLowerCase();
+                        
+                        // Validar contraseña
+                        if (password.length < 6) {
+                            alert('La contraseña debe tener al menos 6 caracteres');
+                            return;
+                        }
+                        
+                        if (password.length > 128) {
+                            alert('La contraseña no puede exceder 128 caracteres');
+                            return;
+                        }
+                        
+                        if (SecurityValidation.detectXSS(password)) {
+                            console.warn('⚠️ Intento de XSS detectado en contraseña');
+                            alert('La contraseña contiene caracteres no permitidos');
+                            return;
+                        }
+                        
+                        // Validar rol
+                        rol = SecurityValidation.sanitizeString(rol, 20);
+                        if (rol !== 'comprador' && rol !== 'vendedor') {
+                            alert('El rol seleccionado no es válido');
+                            return;
+                        }
+                        
+                        // Validar nombre de tienda si es vendedor
+                        if (rol === 'vendedor' && nombreTienda) {
+                            if (SecurityValidation.detectXSS(nombreTienda)) {
+                                console.warn('⚠️ Intento de XSS detectado en nombre de tienda');
+                                alert('El nombre de la tienda contiene caracteres no permitidos');
+                                return;
+                            }
+                            nombreTienda = SecurityValidation.sanitizeString(nombreTienda, 100);
+                        }
+                        
+                        // Validar ubicación si es vendedor
+                        if (rol === 'vendedor' && ubicacion) {
+                            if (SecurityValidation.detectXSS(ubicacion)) {
+                                console.warn('⚠️ Intento de XSS detectado en ubicación');
+                                alert('La ubicación contiene caracteres no permitidos');
+                                return;
+                            }
+                            ubicacion = SecurityValidation.sanitizeString(ubicacion, 200);
+                        }
+                    } else {
+                        // Validación básica si SecurityValidation no está disponible
+                        if (nombre.length < 2 || nombre.length > 100) {
+                            alert('El nombre debe tener entre 2 y 100 caracteres');
+                            return;
+                        }
+                        nombre = nombre.trim();
+                        
+                        if (!email.includes('@') || email.length > 254) {
+                            alert('Por favor, ingresa un correo electrónico válido');
+                            return;
+                        }
+                        email = email.toLowerCase();
+                        
+                        if (password.length < 6) {
+                            alert('La contraseña debe tener al menos 6 caracteres');
+                            return;
+                        }
                     }
 
                     // Validaciones adicionales para vendedores
@@ -517,24 +615,6 @@
             console.log('🔍 [REGISTRO-NOTIFICACIÓN] Solicitud ID:', solicitudId);
             
             try {
-                // Verificar si Firebase Functions está disponible
-                console.log('🔍 [REGISTRO-NOTIFICACIÓN] Verificando Firebase Functions...');
-                if (typeof firebase === 'undefined') {
-                    console.error('❌ [REGISTRO-NOTIFICACIÓN] Firebase no está definido');
-                    return;
-                }
-                
-                if (!firebase.functions) {
-                    console.error('❌ [REGISTRO-NOTIFICACIÓN] firebase.functions no está disponible');
-                    console.log('🔍 [REGISTRO-NOTIFICACIÓN] firebase disponible:', typeof firebase !== 'undefined');
-                    console.log('🔍 [REGISTRO-NOTIFICACIÓN] firebase.functions disponible:', typeof firebase.functions !== 'undefined');
-                    return;
-                }
-                
-                console.log('✅ [REGISTRO-NOTIFICACIÓN] Firebase Functions está disponible');
-                const functions = firebase.functions();
-                console.log('✅ [REGISTRO-NOTIFICACIÓN] Functions inicializado:', functions);
-                
                 // Obtener fecha de solicitud formateada
                 const fechaSolicitud = solicitudData.fecha_solicitud 
                     ? (solicitudData.fecha_solicitud.toDate ? solicitudData.fecha_solicitud.toDate().toLocaleString('es-MX') : new Date().toLocaleString('es-MX'))
@@ -549,39 +629,38 @@
                     fechaSolicitud: fechaSolicitud
                 });
                 
-                // Llamar a la Firebase Function
-                console.log('📞 [REGISTRO-NOTIFICACIÓN] Llamando a Firebase Function: sendNewSellerApplicationNotification');
-                const sendNewSellerApplicationNotification = functions.httpsCallable('sendNewSellerApplicationNotification');
+                // Verificar si la función está disponible
+                if (typeof enviarCorreoNuevaSolicitudAdmin === 'undefined') {
+                    console.error('❌ [REGISTRO-NOTIFICACIÓN] La función enviarCorreoNuevaSolicitudAdmin no está disponible');
+                    console.log('⚠️ [REGISTRO-NOTIFICACIÓN] Asegúrate de que email-helper.js esté cargado');
+                    return;
+                }
                 
-                console.log('⏳ [REGISTRO-NOTIFICACIÓN] Esperando respuesta de Firebase Function...');
-                const result = await sendNewSellerApplicationNotification({
-                    solicitudId: solicitudId,
-                    nombre: solicitudData.nombre,
-                    email: solicitudData.email,
-                    nombreTienda: solicitudData.nombre_tienda,
-                    ubicacion: solicitudData.ubicacion || solicitudData.ubicacion_formatted,
-                    fechaSolicitud: fechaSolicitud
-                });
+                // Llamar a la función de email-helper.js
+                console.log('📞 [REGISTRO-NOTIFICACIÓN] Llamando a enviarCorreoNuevaSolicitudAdmin...');
+                const result = await enviarCorreoNuevaSolicitudAdmin(
+                    solicitudId,
+                    solicitudData.nombre,
+                    solicitudData.email,
+                    solicitudData.nombre_tienda,
+                    solicitudData.ubicacion || solicitudData.ubicacion_formatted,
+                    fechaSolicitud
+                );
                 
-                console.log('📥 [REGISTRO-NOTIFICACIÓN] Respuesta recibida de Firebase Function:', result);
+                console.log('📥 [REGISTRO-NOTIFICACIÓN] Respuesta recibida:', result);
                 
-                if (result && result.data && result.data.success) {
+                if (result && result.success) {
                     console.log('✅ [REGISTRO-NOTIFICACIÓN] Notificación enviada exitosamente a administradores:', {
-                        adminsNotified: result.data.adminsNotified,
-                        adminEmails: result.data.adminEmails,
-                        messageId: result.data.messageId
+                        admin_email: result.admin_email,
+                        message: result.message
                     });
                 } else {
-                    console.warn('⚠️ [REGISTRO-NOTIFICACIÓN] Respuesta inesperada de Firebase Function:', result);
-                    if (result && result.data) {
-                        console.warn('⚠️ [REGISTRO-NOTIFICACIÓN] Mensaje de error:', result.data.message);
-                    }
+                    console.warn('⚠️ [REGISTRO-NOTIFICACIÓN] Respuesta inesperada:', result);
                 }
             } catch (error) {
                 console.error('❌ [REGISTRO-NOTIFICACIÓN] Error completo:', error);
                 console.error('❌ [REGISTRO-NOTIFICACIÓN] Tipo de error:', error.constructor.name);
                 console.error('❌ [REGISTRO-NOTIFICACIÓN] Mensaje:', error.message);
-                console.error('❌ [REGISTRO-NOTIFICACIÓN] Código:', error.code);
                 console.error('❌ [REGISTRO-NOTIFICACIÓN] Stack:', error.stack);
                 // No lanzar el error, solo loguearlo
             }

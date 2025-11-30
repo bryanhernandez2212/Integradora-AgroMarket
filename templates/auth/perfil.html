@@ -23,6 +23,9 @@
     <!-- Firebase Config -->
     <script src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
     
+    <!-- Email Helper -->
+    <script src="{{ url_for('static', filename='js/email-helper.js') }}"></script>
+    
     <!-- Google Maps Places API -->
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCCm9SIv6WBmkejLHJ4X7WaTm8xf6DBpCo&libraries=places&language=es&region=MX" async defer></script>
     
@@ -1761,24 +1764,6 @@
             console.log('🔍 [NOTIFICACIÓN] Datos de solicitud:', solicitudData);
             
             try {
-                // Verificar si Firebase Functions está disponible
-                console.log('🔍 [NOTIFICACIÓN] Verificando Firebase Functions...');
-                if (typeof firebase === 'undefined') {
-                    console.error('❌ [NOTIFICACIÓN] Firebase no está definido');
-                    return;
-                }
-                
-                if (!firebase.functions) {
-                    console.error('❌ [NOTIFICACIÓN] firebase.functions no está disponible');
-                    console.log('🔍 [NOTIFICACIÓN] firebase disponible:', typeof firebase !== 'undefined');
-                    console.log('🔍 [NOTIFICACIÓN] firebase.functions disponible:', typeof firebase.functions !== 'undefined');
-                    return;
-                }
-                
-                console.log('✅ [NOTIFICACIÓN] Firebase Functions está disponible');
-                const functions = firebase.functions();
-                console.log('✅ [NOTIFICACIÓN] Functions inicializado:', functions);
-                
                 // Obtener fecha de solicitud formateada
                 const fechaSolicitud = solicitudData.fecha_solicitud 
                     ? (solicitudData.fecha_solicitud.toDate ? solicitudData.fecha_solicitud.toDate().toLocaleString('es-MX') : new Date().toLocaleString('es-MX'))
@@ -1793,39 +1778,38 @@
                     fechaSolicitud: fechaSolicitud
                 });
                 
-                // Llamar a la Firebase Function
-                console.log('📞 [NOTIFICACIÓN] Llamando a Firebase Function: sendNewSellerApplicationNotification');
-                const sendNewSellerApplicationNotification = functions.httpsCallable('sendNewSellerApplicationNotification');
+                // Verificar si la función está disponible
+                if (typeof enviarCorreoNuevaSolicitudAdmin === 'undefined') {
+                    console.error('❌ [NOTIFICACIÓN] La función enviarCorreoNuevaSolicitudAdmin no está disponible');
+                    console.log('⚠️ [NOTIFICACIÓN] Asegúrate de que email-helper.js esté cargado');
+                    return;
+                }
                 
-                console.log('⏳ [NOTIFICACIÓN] Esperando respuesta de Firebase Function...');
-                const result = await sendNewSellerApplicationNotification({
-                    solicitudId: currentUser.uid,
-                    nombre: solicitudData.nombre,
-                    email: solicitudData.email,
-                    nombreTienda: solicitudData.nombre_tienda,
-                    ubicacion: solicitudData.ubicacion || solicitudData.ubicacion_formatted,
-                    fechaSolicitud: fechaSolicitud
-                });
+                // Llamar a la función de email-helper.js
+                console.log('📞 [NOTIFICACIÓN] Llamando a enviarCorreoNuevaSolicitudAdmin...');
+                const result = await enviarCorreoNuevaSolicitudAdmin(
+                    currentUser.uid,
+                    solicitudData.nombre,
+                    solicitudData.email,
+                    solicitudData.nombre_tienda,
+                    solicitudData.ubicacion || solicitudData.ubicacion_formatted,
+                    fechaSolicitud
+                );
                 
-                console.log('📥 [NOTIFICACIÓN] Respuesta recibida de Firebase Function:', result);
+                console.log('📥 [NOTIFICACIÓN] Respuesta recibida:', result);
                 
-                if (result && result.data && result.data.success) {
+                if (result && result.success) {
                     console.log('✅ [NOTIFICACIÓN] Notificación enviada exitosamente a administradores:', {
-                        adminsNotified: result.data.adminsNotified,
-                        adminEmails: result.data.adminEmails,
-                        messageId: result.data.messageId
+                        admin_email: result.admin_email,
+                        message: result.message
                     });
                 } else {
-                    console.warn('⚠️ [NOTIFICACIÓN] Respuesta inesperada de Firebase Function:', result);
-                    if (result && result.data) {
-                        console.warn('⚠️ [NOTIFICACIÓN] Mensaje de error:', result.data.message);
-                    }
+                    console.warn('⚠️ [NOTIFICACIÓN] Respuesta inesperada:', result);
                 }
             } catch (error) {
                 console.error('❌ [NOTIFICACIÓN] Error completo:', error);
                 console.error('❌ [NOTIFICACIÓN] Tipo de error:', error.constructor.name);
                 console.error('❌ [NOTIFICACIÓN] Mensaje:', error.message);
-                console.error('❌ [NOTIFICACIÓN] Código:', error.code);
                 console.error('❌ [NOTIFICACIÓN] Stack:', error.stack);
                 // No lanzar el error, solo loguearlo
             }

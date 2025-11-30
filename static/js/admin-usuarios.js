@@ -198,40 +198,50 @@ function renderizarUsuarios() {
             ? new Date(usuario.fecha_registro.toDate ? usuario.fecha_registro.toDate() : usuario.fecha_registro).toLocaleDateString('es-MX')
             : 'N/A';
 
-        const rolesHTML = usuario.roles.map(rol => {
-            const clase = `role-${rol}`;
-            return `<span class="role-badge ${clase}">${rol}</span>`;
-        }).join(' ');
+        const rolesHTML = usuario.roles && usuario.roles.length > 0
+            ? usuario.roles.map(rol => {
+                const clase = `role-${rol}`;
+                return `<span class="role-badge ${clase}">${rol}</span>`;
+            }).join('')
+            : '<span style="color: #999;">Sin roles</span>';
+
+        // Escapar nombre para evitar problemas con comillas
+        const nombreEscapado = usuario.nombre.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+        const emailEscapado = usuario.email.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
 
         tr.innerHTML = `
             <td>
                 <div class="user-info">
                     ${usuario.foto_perfil 
-                        ? `<img src="${usuario.foto_perfil}" alt="${usuario.nombre}" class="user-avatar" onerror="this.style.display='none'">`
-                        : `<i class="fas fa-user-circle" style="font-size: 2rem; color: #ddd; margin-right: 0.5rem;"></i>`
+                        ? `<img src="${usuario.foto_perfil}" alt="${nombreEscapado}" class="user-avatar" onerror="this.style.display='none'">`
+                        : `<i class="fas fa-user-circle" style="font-size: 2rem; color: #ddd; margin-right: 0.5rem; flex-shrink: 0;"></i>`
                     }
-                    <div>
-                        <div class="user-name">${usuario.nombre}</div>
+                    <div style="min-width: 0; flex: 1;">
+                        <div class="user-name" title="${nombreEscapado}">${nombreEscapado}</div>
                     </div>
                 </div>
             </td>
             <td>
-                <div class="user-email">${usuario.email}</div>
+                <div class="user-email" title="${emailEscapado}">${emailEscapado}</div>
             </td>
-            <td>${rolesHTML || '<span style="color: #999;">Sin roles</span>'}</td>
+            <td>
+                <div class="role-badges-container">${rolesHTML}</div>
+            </td>
             <td>
                 <span class="status-badge ${usuario.activo ? 'status-activo' : 'status-inactivo'}">
                     ${usuario.activo ? 'Activo' : 'Inactivo'}
                 </span>
             </td>
-            <td>${fechaRegistro}</td>
+            <td>
+                <span class="fecha-registro">${fechaRegistro}</span>
+            </td>
             <td>
                 <div class="action-buttons">
-                    <button class="btn-action btn-edit" onclick="editarUsuario('${usuario.id}')">
+                    <button class="btn-action btn-edit" onclick="editarUsuario('${usuario.id}')" title="Editar usuario">
                         <i class="fas fa-edit"></i> Editar
                     </button>
                     ${usuario.id !== currentUser.uid 
-                        ? `<button class="btn-action btn-delete" onclick="eliminarUsuario('${usuario.id}', '${usuario.nombre}')">
+                        ? `<button class="btn-action btn-delete" onclick="eliminarUsuario('${usuario.id}', '${nombreEscapado.replace(/'/g, "\\'")}')" title="Eliminar usuario">
                             <i class="fas fa-trash"></i> Eliminar
                         </button>`
                         : ''
@@ -334,21 +344,56 @@ async function guardarUsuario(e) {
 }
 
 async function eliminarUsuario(userId, nombre) {
-    if (!confirm(`¿Estás seguro de que quieres eliminar al usuario "${nombre}"? Esta acción no se puede deshacer.`)) {
+    if (!confirm(`¿Estás seguro de que quieres ELIMINAR permanentemente al usuario "${nombre}"?\n\n⚠️ ADVERTENCIA: Esta acción eliminará completamente el usuario de la base de datos y NO se puede deshacer.`)) {
         return;
     }
 
     try {
-        // Marcar como inactivo en lugar de eliminar
-        await db.collection('usuarios').doc(userId).update({
-            activo: false,
-            fecha_actualizacion: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        // Verificar que el usuario actual es administrador antes de intentar eliminar
+        console.log('🔍 Verificando permisos de administrador...');
+        console.log('🔍 Usuario actual UID:', currentUser.uid);
+        
+        const adminDoc = await db.collection('usuarios').doc(currentUser.uid).get();
+        if (!adminDoc.exists) {
+            throw new Error('No se encontró tu usuario en la base de datos');
+        }
+        
+        const adminData = adminDoc.data();
+        console.log('🔍 Datos del administrador:', adminData);
+        console.log('🔍 Rol activo:', adminData.rol_activo);
+        console.log('🔍 Roles:', adminData.roles);
+        
+        const rolActivo = (adminData.rol_activo || '').toLowerCase();
+        const esAdmin = rolActivo === 'administrador';
+        
+        console.log('🔍 ¿Es administrador?', esAdmin);
+        
+        if (!esAdmin) {
+            throw new Error('No tienes permisos de administrador. Tu rol actual es: ' + rolActivo);
+        }
+        
+        console.log('✅ Permisos verificados en JavaScript');
+        console.log('🔄 Intentando eliminar documento en Firestore...');
+        console.log('🔄 ID del usuario a eliminar:', userId);
+        
+        // Eliminar el documento completamente
+        try {
+            await db.collection('usuarios').doc(userId).delete();
+            console.log('✅ Eliminación completada exitosamente');
+        } catch (deleteError) {
+            console.error('❌ Error específico en la eliminación:', deleteError);
+            console.error('❌ Código del error:', deleteError.code);
+            console.error('❌ Stack del error:', deleteError.stack);
+            throw deleteError;
+        }
 
-        alert('Usuario desactivado correctamente');
+        console.log('✅ Usuario eliminado correctamente de la base de datos');
+        alert('✅ Usuario eliminado correctamente');
         await cargarUsuarios();
     } catch (error) {
-        console.error('Error eliminando usuario:', error);
+        console.error('❌ Error eliminando usuario:', error);
+        console.error('❌ Código del error:', error.code);
+        console.error('❌ Mensaje del error:', error.message);
         alert('Error al eliminar el usuario: ' + error.message);
     }
 }
@@ -372,6 +417,63 @@ document.getElementById('editUserModal').addEventListener('click', (e) => {
         cerrarModal();
     }
 });
+
+// Función de depuración para verificar y actualizar rol de administrador
+// Ejecutar en la consola: verificarYActualizarRolAdmin()
+window.verificarYActualizarRolAdmin = async function() {
+    try {
+        if (!currentUser) {
+            console.error('❌ No hay usuario autenticado');
+            return;
+        }
+        
+        console.log('🔍 Verificando rol de administrador...');
+        const userDoc = await db.collection('usuarios').doc(currentUser.uid).get();
+        
+        if (!userDoc.exists) {
+            console.error('❌ Usuario no encontrado en Firestore');
+            return;
+        }
+        
+        const userData = userDoc.data();
+        console.log('📋 Datos actuales del usuario:', userData);
+        console.log('📋 Rol activo actual:', userData.rol_activo);
+        console.log('📋 Roles actuales:', userData.roles);
+        
+        const rolActivo = (userData.rol_activo || '').toLowerCase();
+        const esAdmin = rolActivo === 'administrador';
+        
+        if (esAdmin) {
+            console.log('✅ Ya tienes rol de administrador');
+            return;
+        }
+        
+        console.log('⚠️ No tienes rol de administrador. Actualizando...');
+        
+        // Actualizar rol
+        const roles = userData.roles || [];
+        const rolesArray = Array.isArray(roles) ? roles : [roles];
+        
+        if (!rolesArray.includes('administrador')) {
+            rolesArray.push('administrador');
+        }
+        
+        await db.collection('usuarios').doc(currentUser.uid).update({
+            rol_activo: 'administrador',
+            roles: rolesArray,
+            fecha_actualizacion: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        console.log('✅ Rol de administrador actualizado correctamente');
+        console.log('🔄 Por favor, recarga la página para aplicar los cambios');
+        
+        alert('Rol de administrador actualizado. Por favor, recarga la página.');
+        
+    } catch (error) {
+        console.error('❌ Error actualizando rol:', error);
+        alert('Error al actualizar rol: ' + error.message);
+    }
+};
 
 // Inicializar cuando se carga la página
 document.addEventListener('DOMContentLoaded', initializeFirebase);

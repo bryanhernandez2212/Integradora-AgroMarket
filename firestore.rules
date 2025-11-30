@@ -2,6 +2,17 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // Función helper para verificar si el usuario es administrador
+    function esAdministrador() {
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+             (
+               get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('rol_activo', '') == 'administrador' ||
+               get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('rol_activo', '') == 'Administrador' ||
+               get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('rol_activo', '') == 'ADMINISTRADOR'
+             );
+    }
+    
     // Reglas para la colección de usuarios
     match /usuarios/{userId} {
       // Los usuarios pueden leer su propio documento
@@ -11,12 +22,17 @@ service cloud.firestore {
       // Los administradores pueden actualizar cualquier documento de usuario
       allow update: if request.auth != null && (
                        request.auth.uid == userId ||
-                       // O el usuario es administrador
-                       (exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
-                        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('rol_activo', '') == 'administrador')
+                       esAdministrador()
                      );
-      // Solo el usuario puede crear su propio documento
-      allow create: if request.auth != null && request.auth.uid == userId;
+      // Los usuarios pueden crear su propio documento
+      // Los administradores pueden crear documentos de usuario (para aprobar solicitudes)
+      allow create: if request.auth != null && (
+                       request.auth.uid == userId ||
+                       esAdministrador()
+                     );
+      // Los administradores pueden eliminar usuarios
+      // En producción, preferir marcar como inactivo en lugar de eliminar
+      allow delete: if request.auth != null && esAdministrador();
       // Permitir consultas (list) para buscar vendedores
       allow list: if request.auth != null;
     }
@@ -25,8 +41,20 @@ service cloud.firestore {
     match /productos/{productoId} {
       // Todos los usuarios autenticados pueden leer productos
       allow read: if request.auth != null;
-      // Solo los vendedores pueden crear/actualizar productos (esto se puede ajustar)
-      allow write: if request.auth != null;
+      // Los vendedores pueden crear productos
+      allow create: if request.auth != null;
+      // Los vendedores pueden actualizar solo sus propios productos
+      allow update: if request.auth != null && (
+                       resource.data.vendedor_id == request.auth.uid ||
+                       resource.data.vendedorId == request.auth.uid ||
+                       resource.data.uid == request.auth.uid
+                     );
+      // Los vendedores pueden eliminar solo sus propios productos
+      allow delete: if request.auth != null && (
+                       resource.data.vendedor_id == request.auth.uid ||
+                       resource.data.vendedorId == request.auth.uid ||
+                       resource.data.uid == request.auth.uid
+                     );
     }
     
     // Reglas para la colección de carrito
@@ -114,9 +142,8 @@ service cloud.firestore {
                        (resource.data.user_id == request.auth.uid ||
                         resource.data.usuario_id == request.auth.uid ||
                         solicitudId == request.auth.uid) ||
-                       // O el usuario es administrador (verificar rol_activo)
-                       (exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
-                        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('rol_activo', '') == 'administrador')
+                       // O el usuario es administrador
+                       esAdministrador()
                      );
       
       // Permitir consultas (list) para administradores y usuarios buscando sus propias solicitudes
@@ -159,12 +186,15 @@ service cloud.firestore {
       // Los vendedores pueden actualizar compras que contengan sus productos (para cambiar estado)
       // Permitir actualización si:
       // 1. Es el dueño de la compra, O
-      // 2. Está en vendedores_ids
+      // 2. Está en vendedores_ids (actual o en la actualización)
       allow update: if request.auth != null && (
                        resource.data.usuario_id == request.auth.uid ||
-                       // Verificar si está en vendedores_ids
+                       // Verificar si está en vendedores_ids actual
                        (resource.data.vendedores_ids != null && 
-                        resource.data.vendedores_ids.hasAny([request.auth.uid]))
+                        resource.data.vendedores_ids.hasAny([request.auth.uid])) ||
+                       // Permitir si está agregando su ID a vendedores_ids en esta actualización
+                       (request.resource.data.vendedores_ids != null &&
+                        request.resource.data.vendedores_ids.hasAny([request.auth.uid]))
                      );
       
       // Los usuarios pueden eliminar solo sus propias compras (si está permitido)
@@ -175,10 +205,19 @@ service cloud.firestore {
       allow list: if request.auth != null;
     }
     
+    // Reglas para mensajes de soporte
+    match /mensajes_soporte/{mensajeId} {
+      // Cualquier usuario autenticado puede crear mensajes de soporte
+      allow create: if request.auth != null;
+      // Solo los administradores pueden leer y actualizar mensajes
+      allow read, update: if request.auth != null && esAdministrador();
+      // Permitir consultas (list) para administradores
+      allow list: if request.auth != null && esAdministrador();
+    }
+    
     // Por defecto, denegar todo lo demás
     match /{document=**} {
       allow read, write: if false;
     }
   }
 }
-

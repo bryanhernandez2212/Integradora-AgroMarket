@@ -82,6 +82,15 @@ def ver_ventas():
                          page='ventas',
                          ventas=[])
 
+# ===== Ver Estadísticas =====
+@vendedor_bp.route("/estadisticas")
+@login_required
+@role_required("vendedor")
+def ver_estadisticas():
+    return render_template("vendedor/estadisticas.html", 
+                         nombre=session.get("nombre"), 
+                         page='estadisticas')
+
 # ===== Ver Productos (Catálogo) =====
 @vendedor_bp.route("/catalogo")
 @login_required

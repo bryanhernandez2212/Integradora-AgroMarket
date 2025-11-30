@@ -149,13 +149,37 @@ function obtenerDatosFormulario() {
 }
 
 function validarDatosProducto(datos) {
+    // Validar nombre
     if (!datos.nombre) return 'El nombre es obligatorio';
     if (datos.nombre.length < 3) return 'El nombre debe tener al menos 3 caracteres';
     if (datos.nombre.length > 100) return 'El nombre no puede exceder 100 caracteres';
+    
+    // Detectar XSS en nombre
+    if (typeof SecurityValidation !== 'undefined' && SecurityValidation.detectXSS(datos.nombre)) {
+        console.warn('⚠️ Intento de XSS detectado en nombre del producto');
+        return 'El nombre contiene caracteres no permitidos. Por favor, usa solo texto normal.';
+    }
+    
+    // Sanitizar nombre
+    if (typeof SecurityValidation !== 'undefined') {
+        datos.nombre = SecurityValidation.sanitizeString(datos.nombre, 100);
+    }
 
+    // Validar descripción
     if (!datos.descripcion) return 'La descripción es obligatoria';
     if (datos.descripcion.length < 10) return 'La descripción debe tener al menos 10 caracteres';
     if (datos.descripcion.length > 1000) return 'La descripción no puede exceder 1000 caracteres';
+    
+    // Detectar XSS en descripción
+    if (typeof SecurityValidation !== 'undefined' && SecurityValidation.detectXSS(datos.descripcion)) {
+        console.warn('⚠️ Intento de XSS detectado en descripción del producto');
+        return 'La descripción contiene caracteres no permitidos. Por favor, usa solo texto normal.';
+    }
+    
+    // Sanitizar descripción
+    if (typeof SecurityValidation !== 'undefined') {
+        datos.descripcion = SecurityValidation.sanitizeString(datos.descripcion, 1000);
+    }
 
     if (!datos.categoria) return 'Debes seleccionar una categoría';
     if (!datos.unidad) return 'Debes seleccionar una unidad';
@@ -172,11 +196,25 @@ async function guardarProducto(datos) {
         throw new Error('Firebase no está inicializado correctamente');
     }
 
+    // Sanitizar datos antes de guardar (segunda capa de protección)
+    const nombre = typeof SecurityValidation !== 'undefined' 
+        ? SecurityValidation.sanitizeString(datos.nombre, 100) 
+        : datos.nombre;
+    const descripcion = typeof SecurityValidation !== 'undefined' 
+        ? SecurityValidation.sanitizeString(datos.descripcion, 1000) 
+        : datos.descripcion;
+    const categoria = typeof SecurityValidation !== 'undefined' 
+        ? SecurityValidation.sanitizeString(datos.categoria, 50) 
+        : datos.categoria;
+    const unidad = typeof SecurityValidation !== 'undefined' 
+        ? SecurityValidation.sanitizeString(datos.unidad, 20) 
+        : datos.unidad;
+
     const producto = {
-        nombre: datos.nombre,
-        descripcion: datos.descripcion,
-        categoria: datos.categoria,
-        unidad: datos.unidad,
+        nombre: nombre,
+        descripcion: descripcion,
+        categoria: categoria,
+        unidad: unidad,
         precio: datos.precio,
         stock: datos.stock,
         vendedor_id: currentUser.uid,

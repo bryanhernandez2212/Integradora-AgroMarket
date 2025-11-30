@@ -82,6 +82,8 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     
+    <!-- Security Validation -->
+    <script src="{{ url_for('static', filename='js/security-validation.js') }}"></script>
     <!-- Firebase Ultra-Fast -->
     <script src="{{ url_for('static', filename='js/firebase-ultra-fast.js') }}"></script>
 
@@ -103,12 +105,54 @@
         loginFormElement.addEventListener('submit', async function(e) {
             e.preventDefault(); // Prevenir envío por defecto
             
-            const email = document.getElementById('email').value.trim();
-            const password = document.getElementById('password').value.trim();
+            let email = document.getElementById('email').value.trim();
+            let password = document.getElementById('password').value;
 
             if (!email || !password) {
                 alert('❌ Por favor, completa todos los campos');
                 return;
+            }
+            
+            // Validación de seguridad
+            if (typeof SecurityValidation !== 'undefined') {
+                // Validar email
+                if (!SecurityValidation.validateEmail(email)) {
+                    alert('❌ Por favor, ingresa un correo electrónico válido');
+                    return;
+                }
+                
+                // Detectar XSS
+                if (SecurityValidation.detectXSS(email)) {
+                    console.warn('⚠️ Intento de XSS detectado en login');
+                    alert('❌ El correo electrónico contiene caracteres no permitidos');
+                    return;
+                }
+                
+                email = email.toLowerCase();
+                
+                // Validar contraseña
+                if (password.length < 6) {
+                    alert('❌ La contraseña debe tener al menos 6 caracteres');
+                    return;
+                }
+                
+                if (SecurityValidation.detectXSS(password)) {
+                    console.warn('⚠️ Intento de XSS detectado en contraseña');
+                    alert('❌ La contraseña contiene caracteres no permitidos');
+                    return;
+                }
+            } else {
+                // Validación básica si SecurityValidation no está disponible
+                if (!email.includes('@') || email.length > 254) {
+                    alert('❌ Por favor, ingresa un correo electrónico válido');
+                    return;
+                }
+                email = email.toLowerCase();
+                
+                if (password.length < 6) {
+                    alert('❌ La contraseña debe tener al menos 6 caracteres');
+                    return;
+                }
             }
 
             // Mostrar loading en el botón

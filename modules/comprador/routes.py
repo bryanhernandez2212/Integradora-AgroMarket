@@ -788,6 +788,7 @@ def obtener_detalles_pago(payment_intent_id):
 
 # ===== API: Enviar correo de cambio de estado de pedido =====
 @comprador.route("/api/enviar-correo-cambio-estado", methods=["POST"])
+@login_required
 def api_enviar_correo_cambio_estado():
     """API para enviar correo cuando cambia el estado de un pedido"""
     try:

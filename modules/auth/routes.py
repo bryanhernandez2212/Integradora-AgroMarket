@@ -5,6 +5,14 @@ from datetime import datetime, timedelta
 import secrets
 import hashlib
 import os
+import sys
+
+# Agregar el directorio raíz al path para importar utils
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.security import (
+    sanitize_email, sanitize_string, sanitize_text_area,
+    detect_xss_attempt, log_security_event
+)
 
 # Importar utilidades para Firebase Functions
 FIREBASE_FUNCTIONS_AVAILABLE = False
@@ -97,15 +105,32 @@ def sincronizar_rol():
     try:
         data = request.get_json()
         
-        # Por ahora, aceptamos la petición sin validar el token (en producción deberías validar el token de Firebase)
-        user_id = data.get('user_id')
-        roles = data.get('roles', [])
-        rol_activo = data.get('rol_activo', 'comprador')
-        nombre = data.get('nombre', 'Usuario')
-        email = data.get('email', '')
+        # Sanitizar y validar datos
+        user_id = sanitize_string(str(data.get('user_id', '')), max_length=128) if data.get('user_id') else None
+        email_raw = data.get('email', '')
+        email = sanitize_email(email_raw) if email_raw else ''
+        nombre_raw = data.get('nombre', 'Usuario')
+        nombre = sanitize_string(nombre_raw, max_length=100)
+        rol_activo_raw = data.get('rol_activo', 'comprador')
+        rol_activo = sanitize_string(rol_activo_raw, max_length=20)
+        roles_raw = data.get('roles', [])
         
-        if not user_id:
-            return jsonify({'error': 'user_id es requerido'}), 400
+        # Validar roles (debe ser una lista de strings)
+        roles = []
+        if isinstance(roles_raw, list):
+            for role in roles_raw:
+                if isinstance(role, str):
+                    sanitized_role = sanitize_string(role, max_length=20)
+                    if sanitized_role and sanitized_role.lower() in ['comprador', 'vendedor', 'administrador']:
+                        roles.append(sanitized_role.lower())
+        
+        # Detectar intentos de XSS
+        if detect_xss_attempt(nombre_raw) or detect_xss_attempt(email_raw) or detect_xss_attempt(rol_activo_raw):
+            log_security_event('xss_attempt', {'field': 'sincronizar_rol', 'user_id': user_id})
+            return jsonify({'error': 'Se detectó contenido no permitido'}), 400
+        
+        if not user_id or not email:
+            return jsonify({'error': 'user_id y email son requeridos'}), 400
         
         # Normalizar roles a minúsculas para comparación
         if isinstance(roles, list):
@@ -821,8 +846,23 @@ def reset_password():
             password = data.get('password', '').strip()
             password_confirm = data.get('password_confirm', '').strip()
         else:
-            password = request.form.get('password', '').strip()
-            password_confirm = request.form.get('password_confirm', '').strip()
+            password_raw = request.form.get('password', '').strip()
+            password_confirm_raw = request.form.get('password_confirm', '').strip()
+            
+            # Sanitizar contraseñas (no escapar HTML, solo eliminar caracteres de control)
+            password = sanitize_string(password_raw, max_length=128, allow_html=False)
+            password_confirm = sanitize_string(password_confirm_raw, max_length=128, allow_html=False)
+            
+            # Validar longitud mínima
+            if len(password) < 6:
+                flash('La contraseña debe tener al menos 6 caracteres.', 'danger')
+                return render_template('auth/reset_password.html', code=code)
+            
+            # Detectar intentos de XSS (aunque las contraseñas no se muestran, es buena práctica)
+            if detect_xss_attempt(password_raw) or detect_xss_attempt(password_confirm_raw):
+                log_security_event('xss_attempt', {'field': 'reset_password'})
+                flash('Se detectó contenido no permitido. Por favor, intenta nuevamente.', 'danger')
+                return render_template('auth/reset_password.html', code=code)
         
         # Validar contraseñas
         if not password or len(password) < 6:

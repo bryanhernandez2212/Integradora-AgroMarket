@@ -1203,3 +1203,158 @@
         width: 100%;
     }
 }
+
+/* ===== ESTILOS PARA ESTADÍSTICAS Y GRÁFICAS ===== */
+.estadisticas-container {
+    margin-bottom: 3rem;
+    padding: 2rem;
+    background: #f8f9fa;
+    border-radius: 12px;
+}
+
+.estadisticas-header {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.estadisticas-header h2 {
+    color: #2e8b57;
+    font-size: 1.8rem;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.filtro-periodo select {
+    padding: 0.75rem 1rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.filtro-periodo select:focus {
+    outline: none;
+    border-color: #2e8b57;
+    box-shadow: 0 0 0 3px rgba(46, 139, 87, 0.1);
+}
+
+/* Métricas principales */
+.metricas-principales {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.metrica-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.metrica-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.metrica-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    background: linear-gradient(135deg, #2e8b57 0%, #20c997 100%);
+    color: white;
+    flex-shrink: 0;
+}
+
+.metrica-info {
+    flex: 1;
+    text-align: center;
+    width: 100%;
+}
+
+.metrica-info h3 {
+    font-size: 0.9rem;
+    color: #666;
+    margin: 0 0 0.75rem 0;
+    font-weight: 500;
+}
+
+.metrica-valor {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #2e8b57;
+    margin: 0 0 0.25rem 0;
+}
+
+.metrica-tendencia {
+    font-size: 0.85rem;
+    color: #666;
+}
+
+/* Gráficas */
+.graficas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.grafica-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.grafica-card h3 {
+    font-size: 1.2rem;
+    color: #2e8b57;
+    margin: 0 0 1.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.grafica-card canvas {
+    max-height: 300px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .estadisticas-container {
+        padding: 1rem;
+    }
+
+    .estadisticas-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .metricas-principales {
+        grid-template-columns: 1fr;
+    }
+
+    .graficas-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .grafica-card canvas {
+        max-height: 250px;
+    }
+}

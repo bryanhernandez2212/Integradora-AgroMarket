@@ -60,6 +60,37 @@ async function loginUltraFast(email, password) {
     console.log('⚡ INICIO LOGIN ULTRA-RÁPIDO...');
 
     try {
+        // Validar y sanitizar email
+        if (typeof SecurityValidation !== 'undefined') {
+            if (!SecurityValidation.validateEmail(email)) {
+                throw new Error('Por favor, ingresa un correo electrónico válido');
+            }
+            email = email.trim().toLowerCase();
+            
+            // Detectar XSS
+            if (SecurityValidation.detectXSS(email)) {
+                console.warn('⚠️ Intento de XSS detectado en email de login');
+                throw new Error('El correo electrónico contiene caracteres no permitidos');
+            }
+        } else {
+            // Validación básica si SecurityValidation no está disponible
+            if (!email || !email.includes('@') || email.length > 254) {
+                throw new Error('Por favor, ingresa un correo electrónico válido');
+            }
+            email = email.trim().toLowerCase();
+        }
+        
+        // Validar contraseña
+        if (!password || password.length < 6) {
+            throw new Error('La contraseña debe tener al menos 6 caracteres');
+        }
+        
+        // Detectar XSS en contraseña (aunque no se muestra, es buena práctica)
+        if (typeof SecurityValidation !== 'undefined' && SecurityValidation.detectXSS(password)) {
+            console.warn('⚠️ Intento de XSS detectado en contraseña');
+            throw new Error('La contraseña contiene caracteres no permitidos');
+        }
+        
         // Inicializar Firebase
         const { auth, db } = await initializeFirebaseUltra();
         
@@ -380,12 +411,69 @@ async function registerUltraFast(nombre, email, password, rol = 'comprador') {
             throw new Error('Todos los campos son obligatorios');
         }
         
+        // Validar y sanitizar nombre
+        if (typeof SecurityValidation !== 'undefined') {
+            if (!SecurityValidation.validateName(nombre, 2, 100)) {
+                throw new Error('El nombre debe tener entre 2 y 100 caracteres y solo contener letras, espacios, guiones y apóstrofes');
+            }
+            
+            // Detectar XSS en nombre
+            if (SecurityValidation.detectXSS(nombre)) {
+                console.warn('⚠️ Intento de XSS detectado en nombre de registro');
+                throw new Error('El nombre contiene caracteres no permitidos. Por favor, usa solo texto normal.');
+            }
+            
+            nombre = SecurityValidation.sanitizeString(nombre, 100);
+        } else {
+            // Validación básica
+            if (nombre.length < 2 || nombre.length > 100) {
+                throw new Error('El nombre debe tener entre 2 y 100 caracteres');
+            }
+            nombre = nombre.trim();
+        }
+        
+        // Validar y sanitizar email
+        if (typeof SecurityValidation !== 'undefined') {
+            if (!SecurityValidation.validateEmail(email)) {
+                throw new Error('Por favor, ingresa un correo electrónico válido');
+            }
+            email = email.trim().toLowerCase();
+            
+            // Detectar XSS
+            if (SecurityValidation.detectXSS(email)) {
+                console.warn('⚠️ Intento de XSS detectado en email de registro');
+                throw new Error('El correo electrónico contiene caracteres no permitidos');
+            }
+        } else {
+            // Validación básica
+            if (!email.includes('@') || email.length > 254) {
+                throw new Error('El correo electrónico no es válido');
+            }
+            email = email.trim().toLowerCase();
+        }
+        
+        // Validar contraseña
         if (password.length < 6) {
             throw new Error('La contraseña debe tener al menos 6 caracteres');
         }
         
-        if (!email.includes('@')) {
-            throw new Error('El correo electrónico no es válido');
+        if (password.length > 128) {
+            throw new Error('La contraseña no puede exceder 128 caracteres');
+        }
+        
+        // Detectar XSS en contraseña
+        if (typeof SecurityValidation !== 'undefined' && SecurityValidation.detectXSS(password)) {
+            console.warn('⚠️ Intento de XSS detectado en contraseña');
+            throw new Error('La contraseña contiene caracteres no permitidos');
+        }
+        
+        // Validar rol
+        if (rol && typeof SecurityValidation !== 'undefined') {
+            const sanitizedRol = SecurityValidation.sanitizeString(rol, 20);
+            if (sanitizedRol !== 'comprador' && sanitizedRol !== 'vendedor') {
+                throw new Error('El rol seleccionado no es válido');
+            }
+            rol = sanitizedRol;
         }
 
         // Inicializar Firebase
