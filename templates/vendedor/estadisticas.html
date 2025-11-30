@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Ventas - AgroMarket</title>
+  <title>Estadísticas - AgroMarket</title>
 
   <!-- PWA: Manifest y theme color -->
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
@@ -14,13 +14,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos_vendedor.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/breadcrumbs.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/navigation-header.css') }}">
-    <link rel="stylesheet" href="/static/css/estilos_ventas.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-    <script src="{{ url_for('static', filename='js/mobile-menu.js') }}" defer></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos_vendedor.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/breadcrumbs.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/navigation-header.css') }}">
+  <link rel="stylesheet" href="/static/css/estilos_ventas.css">
+  <!-- Chart.js para gráficas de estadísticas -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="{{ url_for('static', filename='js/mobile-menu.js') }}" defer></script>
 </head> 
 <body>
     <!-- ===== Overlay para móviles ===== -->
@@ -96,34 +97,94 @@
         <div class="breadcrumbs">
             <a href="{{ url_for('vendedor.panel_vendedor') }}">Inicio</a>
             <span>/</span>
-            <span>Ventas</span>
+            <span>Estadísticas</span>
         </div>
     </div>
+    
     <div class="ventas-header">
         <div>
-            <h1>Ventas</h1>
+            <h1>Estadísticas de Ventas</h1>
         </div>
-        <button id="btn-pedidos-entregados" class="btn-pedidos-entregados">
-            <i class="fas fa-check-circle"></i> Pedidos Entregados
-        </button>
     </div>
 
     <!-- Loading state -->
-    <div id="loading-ventas" class="loading-ventas">
+    <div id="loading-estadisticas" class="loading-ventas">
         <i class="fas fa-spinner fa-spin"></i>
-        <p>Cargando ventas...</p>
+        <p>Cargando estadísticas...</p>
     </div>
 
     <!-- Empty state -->
-    <div id="empty-ventas" class="empty-ventas" style="display: none;">
-        <i class="fas fa-shopping-bag"></i>
-        <h3>No hay ventas registradas aún</h3>
-        <p>Cuando los compradores adquieran tus productos, aparecerán aquí.</p>
+    <div id="empty-estadisticas" class="empty-ventas" style="display: none;">
+        <i class="fas fa-chart-bar"></i>
+        <h3>No hay estadísticas disponibles</h3>
+        <p>Cuando tengas ventas, aparecerán estadísticas aquí.</p>
     </div>
 
-    <!-- Ventas container -->
-    <div id="ventas-container" class="ventas-container" style="display: none;">
-        <!-- Las ventas se cargarán aquí dinámicamente -->
+    <!-- Estadísticas y Gráficas -->
+    <div id="estadisticas-container" class="estadisticas-container" style="display: none;">
+        <div class="estadisticas-header">
+            <div class="filtro-periodo">
+                <select id="filtro-periodo-estadisticas" onchange="cargarEstadisticas()">
+                    <option value="todos">Todos los tiempos</option>
+                    <option value="7">Últimos 7 días</option>
+                    <option value="30" selected>Últimos 30 días</option>
+                    <option value="90">Últimos 90 días</option>
+                    <option value="365">Último año</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Métricas principales -->
+        <div class="metricas-principales">
+            <div class="metrica-card">
+                <div class="metrica-info">
+                    <h3>Total Vendido</h3>
+                    <p class="metrica-valor" id="metrica-total-vendido">$0.00</p>
+                    <span class="metrica-tendencia" id="tendencia-total"></span>
+                </div>
+            </div>
+            <div class="metrica-card">
+                <div class="metrica-info">
+                    <h3>Total de Pedidos</h3>
+                    <p class="metrica-valor" id="metrica-total-pedidos">0</p>
+                    <span class="metrica-tendencia" id="tendencia-pedidos"></span>
+                </div>
+            </div>
+            <div class="metrica-card">
+                <div class="metrica-info">
+                    <h3>Productos Vendidos</h3>
+                    <p class="metrica-valor" id="metrica-productos-vendidos">0</p>
+                    <span class="metrica-tendencia" id="tendencia-productos"></span>
+                </div>
+            </div>
+            <div class="metrica-card">
+                <div class="metrica-info">
+                    <h3>Pedidos Completados</h3>
+                    <p class="metrica-valor" id="metrica-pedidos-completados">0</p>
+                    <span class="metrica-tendencia" id="tendencia-completados"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráficas -->
+        <div class="graficas-grid">
+            <div class="grafica-card">
+                <h3><i class="fas fa-chart-line"></i> Ventas por Mes</h3>
+                <canvas id="grafica-ventas-mes"></canvas>
+            </div>
+            <div class="grafica-card">
+                <h3><i class="fas fa-chart-bar"></i> Productos Más Vendidos</h3>
+                <canvas id="grafica-productos-vendidos"></canvas>
+            </div>
+            <div class="grafica-card">
+                <h3><i class="fas fa-chart-pie"></i> Distribución por Estado</h3>
+                <canvas id="grafica-estados"></canvas>
+            </div>
+            <div class="grafica-card">
+                <h3><i class="fas fa-chart-area"></i> Ventas por Día</h3>
+                <canvas id="grafica-ventas-dia"></canvas>
+            </div>
+        </div>
     </div>
 </main>
 
@@ -131,11 +192,9 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-functions.js"></script>
 <script src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
 
-<script src="{{ url_for('static', filename='js/ventas.js') }}"></script>
-
+<script src="{{ url_for('static', filename='js/estadisticas.js') }}"></script>
 
 </body>
 </html>

@@ -465,33 +465,76 @@ window.editProduct = function editProduct(productId) {
 };
 
 window.pauseProduct = async function pauseProduct(productId) {
-    const confirmText = '¿Estás seguro de que quieres cambiar el estado de este producto?';
-    if (!confirm(confirmText)) return;
-
     try {
-        setStatus('⏳ Actualizando estado del producto...');
+        if (!db) {
+            alert('Error: Base de datos no disponible');
+            return;
+        }
+
+        if (!auth || !auth.currentUser) {
+            alert('Error: Usuario no autenticado');
+            return;
+        }
+
         const docRef = db.collection('productos').doc(productId);
         const doc = await docRef.get();
-        if (!doc.exists) throw new Error('Producto no encontrado');
+        
+        if (!doc.exists) {
+            alert('Error: Producto no encontrado');
+            return;
+        }
 
         const data = doc.data();
-        const nuevoEstado = !(data.activo !== false);
+        
+        // Verificar que el producto pertenezca al vendedor actual
+        const vendedorId = data.vendedor_id || data.vendedorId || data.uid || '';
+        if (String(vendedorId) !== String(auth.currentUser.uid)) {
+            alert('Error: No tienes permisos para modificar este producto. Solo puedes modificar tus propios productos.');
+            return;
+        }
+        
+        const estaActivo = data.activo !== false; // true si está activo, false si está pausado
+        const nuevoEstado = !estaActivo; // Cambiar al estado opuesto
 
+        // Confirmación antes de cambiar
+        const mensajeConfirmacion = nuevoEstado 
+            ? '¿Estás seguro de que quieres reactivar este producto?'
+            : '¿Estás seguro de que quieres pausar este producto?';
+        
+        if (!confirm(mensajeConfirmacion)) {
+            return;
+        }
+
+        setStatus('⏳ Actualizando estado del producto...', 'info');
+
+        // Actualizar el estado del producto
         await docRef.update({
-            activo: !nuevoEstado,
+            activo: nuevoEstado,
             fecha_actualizacion: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        setStatus(nuevoEstado ? '⏸️ Producto pausado' : '▶️ Producto reactivado', 'success');
+        setStatus(nuevoEstado ? '▶️ Producto reactivado' : '⏸️ Producto pausado', 'success');
+        mostrarMensaje(nuevoEstado ? '✅ Producto reactivado correctamente' : '✅ Producto pausado correctamente', 'success');
 
-        const user = auth.currentUser;
-        if (user) {
-            await loadProducts(user.uid);
-        }
+        // Recargar productos para actualizar la vista
+        await loadProducts(auth.currentUser.uid);
+        
     } catch (error) {
-        console.error('Error al pausar producto:', error);
-        setStatus('❌ Error al cambiar estado: ' + error.message, 'error');
-        mostrarMensaje('❌ Error al cambiar estado del producto', 'error');
+        console.error('❌ Error al cambiar estado del producto:', error);
+        console.error('❌ Código del error:', error.code);
+        console.error('❌ Mensaje del error:', error.message);
+        
+        let mensajeError = 'Error al cambiar el estado del producto: ';
+        if (error.code === 'permission-denied') {
+            mensajeError += 'No tienes permisos para realizar esta acción.';
+        } else if (error.message) {
+            mensajeError += error.message;
+        } else {
+            mensajeError += 'Error desconocido. Por favor, intenta nuevamente.';
+        }
+        
+        setStatus(mensajeError, 'error');
+        mostrarMensaje(mensajeError, 'error');
     }
 };
 

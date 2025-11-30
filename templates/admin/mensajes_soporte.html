@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mensajes de Soporte - Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos_admin.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/breadcrumbs.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navigation-header.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-Yd3F2m9Uq+vR0NvKcJsteVEh9UpAJZciV06P88GJEqn3Ejj6+UeJ8V+RaH59RUW2KIiMzZljI0X58F3Rp3crJQ==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    
+    <style>
+        .mensajes-container {
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .mensajes-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        
+        .filtros-section {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        
+        .filtro-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .filtro-btn.active {
+            background: #dc3545;
+            color: white;
+            border-color: #dc3545;
+        }
+        
+        .mensajes-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .mensaje-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #2e8b57;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .mensaje-card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        
+        .mensaje-card.no-leido {
+            border-left-color: #dc3545;
+            background: #fff5f5;
+        }
+        
+        .mensaje-card.respondido {
+            border-left-color: #28a745;
+            opacity: 0.8;
+        }
+        
+        .mensaje-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+        
+        .mensaje-info {
+            flex: 1;
+        }
+        
+        .mensaje-nombre {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.25rem;
+        }
+        
+        .mensaje-email {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .mensaje-asunto {
+            display: inline-block;
+            background: #e8f5e9;
+            color: #2e8b57;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .mensaje-fecha {
+            color: #999;
+            font-size: 0.85rem;
+        }
+        
+        .mensaje-badges {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .badge.no-leido {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        .badge.leido {
+            background: #e8f5e9;
+            color: #2e8b57;
+        }
+        
+        .badge.respondido {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .mensaje-preview {
+            color: #666;
+            margin-top: 1rem;
+            line-height: 1.6;
+            max-height: 100px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .mensaje-detalle {
+            display: none;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #eee;
+        }
+        
+        .mensaje-detalle.expanded {
+            display: block;
+        }
+        
+        .mensaje-texto {
+            background: #f9f9f9;
+            padding: 1rem;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            line-height: 1.6;
+            margin-bottom: 1rem;
+        }
+        
+        .mensaje-acciones {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .btn-accion {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        
+        .btn-marcar-leido {
+            background: #e8f5e9;
+            color: #2e8b57;
+        }
+        
+        .btn-marcar-leido:hover {
+            background: #c8e6c9;
+        }
+        
+        .btn-marcar-respondido {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .btn-marcar-respondido:hover {
+            background: #bbdefb;
+        }
+        
+        .btn-responder {
+            background: #2e8b57;
+            color: white;
+        }
+        
+        .btn-responder:hover {
+            background: #228B22;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #999;
+        }
+        
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+        
+        .loading-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #999;
+        }
+        
+        .loading-state i {
+            font-size: 2rem;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!--Menu-->
+    <nav>
+        <div class="nav-left">
+            <div class="logo"><h2>AgroMarket</h2></div>
+            <div class="saludo-usuario">Hola, <strong>{{ nombre }}</strong></div>
+        </div>
+        <div class="menu">
+            <a href="/admin/panel" {% if page == 'inicio' %}class="activo"{% endif %}>Home</a>
+            <a href="/admin/solicitudes-vendedores" {% if page == 'solicitudes' %}class="activo"{% endif %}>Solicitudes</a>
+            <a href="/admin/usuarios" {% if page == 'usuarios' %}class="activo"{% endif %}>Usuarios</a>
+            <a href="/admin/mensajes-soporte" {% if page == 'soporte' %}class="activo"{% endif %}>Soporte</a>
+            <a href="/auth/perfil">Mi Perfil</a>
+            <a href="#" onclick="cerrarSesion()">Cerrar Sesión</a>
+        </div>
+    </nav>
+
+    <main>
+        <!-- Navigation Header -->
+        <div class="navigation-header">
+            <div></div>
+            <div class="breadcrumbs">
+                <a href="/admin/panel">Panel Administrador</a>
+                <span>/</span>
+                <span>Mensajes de Soporte</span>
+            </div>
+        </div>
+
+        <div class="mensajes-container">
+            <div class="mensajes-header">
+                <h1><i class="fas fa-headset"></i> Mensajes de Soporte</h1>
+                <div id="mensajesCount" style="color: #666; font-size: 0.9rem;">Cargando...</div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="filtros-section">
+                <button class="filtro-btn active" onclick="filtrarMensajes('todos')">Todos</button>
+                <button class="filtro-btn" onclick="filtrarMensajes('no-leidos')">No leídos</button>
+                <button class="filtro-btn" onclick="filtrarMensajes('leidos')">Leídos</button>
+                <button class="filtro-btn" onclick="filtrarMensajes('respondidos')">Respondidos</button>
+            </div>
+
+            <!-- Lista de mensajes -->
+            <div id="mensajesList" class="mensajes-list">
+                <div class="loading-state">
+                    <i class="fas fa-spinner"></i>
+                    <p>Cargando mensajes...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
+    
+    <script>
+        let auth = null;
+        let db = null;
+        let allMensajes = [];
+        let filtroActivo = 'todos';
+
+        async function initializeFirebase() {
+            try {
+                if (typeof firebase === 'undefined') {
+                    throw new Error('Firebase SDK no está cargado');
+                }
+
+                if (firebase.apps.length > 0) {
+                    auth = firebase.auth();
+                    db = firebase.firestore();
+                } else {
+                    const app = firebase.initializeApp(window.firebaseConfig);
+                    auth = firebase.auth();
+                    db = firebase.firestore();
+                }
+
+                db.settings({
+                    cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
+                    ignoreUndefinedProperties: true
+                });
+
+                auth.onAuthStateChanged(async (user) => {
+                    if (!user) {
+                        window.location.href = '/auth/login';
+                        return;
+                    }
+                    await cargarMensajes();
+                });
+            } catch (error) {
+                console.error('Error inicializando Firebase:', error);
+            }
+        }
+
+        async function cargarMensajes() {
+            try {
+                // Verificar que el usuario esté autenticado
+                const user = auth.currentUser;
+                if (!user) {
+                    console.error('Usuario no autenticado');
+                    window.location.href = '/auth/login';
+                    return;
+                }
+
+                // Verificar que el usuario sea administrador
+                const userDoc = await db.collection('usuarios').doc(user.uid).get();
+                if (!userDoc.exists) {
+                    console.error('Usuario no encontrado en Firestore');
+                    document.getElementById('mensajesList').innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>Error: Usuario no encontrado. Por favor, contacta al administrador.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const userData = userDoc.data();
+                const rolActivo = (userData.rol_activo || '').toLowerCase();
+                const roles = userData.roles || [];
+                const tieneAdmin = roles.some(r => String(r).toLowerCase() === 'administrador') || 
+                                 rolActivo === 'administrador';
+
+                if (!tieneAdmin) {
+                    console.error('Usuario no es administrador');
+                    document.getElementById('mensajesList').innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>No tienes permisos para ver los mensajes de soporte.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Intentar cargar con orderBy, si falla intentar sin orderBy
+                let mensajesSnapshot;
+                try {
+                    mensajesSnapshot = await db.collection('mensajes_soporte')
+                        .orderBy('fecha', 'desc')
+                        .get();
+                } catch (orderByError) {
+                    console.warn('Error con orderBy, intentando sin orden:', orderByError);
+                    // Si falla el orderBy (por ejemplo, falta índice), cargar sin orden
+                    mensajesSnapshot = await db.collection('mensajes_soporte').get();
+                }
+
+                allMensajes = [];
+                mensajesSnapshot.forEach(doc => {
+                    const data = doc.data();
+                    allMensajes.push({
+                        id: doc.id,
+                        ...data
+                    });
+                });
+
+                // Ordenar manualmente por fecha si no se pudo hacer con orderBy
+                if (allMensajes.length > 0) {
+                    allMensajes.sort((a, b) => {
+                        const fechaA = a.fecha ? (a.fecha.toDate ? a.fecha.toDate() : new Date(a.fecha)) : new Date(0);
+                        const fechaB = b.fecha ? (b.fecha.toDate ? b.fecha.toDate() : new Date(b.fecha)) : new Date(0);
+                        return fechaB - fechaA; // Descendente
+                    });
+                }
+
+                actualizarVista();
+            } catch (error) {
+                console.error('Error cargando mensajes:', error);
+                console.error('Detalles del error:', {
+                    code: error.code,
+                    message: error.message,
+                    stack: error.stack
+                });
+                
+                let mensajeError = 'Error al cargar los mensajes. Por favor, recarga la página.';
+                if (error.code === 'permission-denied') {
+                    mensajeError = 'No tienes permisos para ver los mensajes de soporte. Verifica que seas administrador.';
+                } else if (error.message) {
+                    mensajeError = `Error: ${error.message}`;
+                }
+                
+                document.getElementById('mensajesList').innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>${mensajeError}</p>
+                        <p style="margin-top: 1rem; font-size: 0.85rem; color: #999;">
+                            Código de error: ${error.code || 'N/A'}<br>
+                            Si el problema persiste, contacta al administrador del sistema.
+                        </p>
+                    </div>
+                `;
+            }
+        }
+
+        function filtrarMensajes(filtro) {
+            filtroActivo = filtro;
+            
+            // Actualizar botones
+            document.querySelectorAll('.filtro-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            actualizarVista();
+        }
+
+        function actualizarVista() {
+            let mensajesFiltrados = allMensajes;
+
+            // Aplicar filtro
+            if (filtroActivo === 'no-leidos') {
+                mensajesFiltrados = allMensajes.filter(m => !m.leido);
+            } else if (filtroActivo === 'leidos') {
+                mensajesFiltrados = allMensajes.filter(m => m.leido && !m.respondido);
+            } else if (filtroActivo === 'respondidos') {
+                mensajesFiltrados = allMensajes.filter(m => m.respondido);
+            }
+
+            // Actualizar contador
+            const total = allMensajes.length;
+            const noLeidos = allMensajes.filter(m => !m.leido).length;
+            document.getElementById('mensajesCount').textContent = 
+                `${mensajesFiltrados.length} de ${total} mensajes${noLeidos > 0 ? ` (${noLeidos} no leídos)` : ''}`;
+
+            // Renderizar mensajes
+            if (mensajesFiltrados.length === 0) {
+                document.getElementById('mensajesList').innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-inbox"></i>
+                        <p>No hay mensajes que mostrar</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const mensajesHTML = mensajesFiltrados.map(mensaje => {
+                const fecha = mensaje.fecha ? 
+                    (mensaje.fecha.toDate ? mensaje.fecha.toDate() : new Date(mensaje.fecha)) : 
+                    new Date();
+                const fechaFormateada = fecha.toLocaleDateString('es-MX', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                const clasesCard = [
+                    !mensaje.leido ? 'no-leido' : '',
+                    mensaje.respondido ? 'respondido' : ''
+                ].filter(c => c).join(' ');
+
+                const badges = [];
+                if (!mensaje.leido) badges.push('<span class="badge no-leido">No leído</span>');
+                if (mensaje.leido) badges.push('<span class="badge leido">Leído</span>');
+                if (mensaje.respondido) badges.push('<span class="badge respondido">Respondido</span>');
+
+                return `
+                    <div class="mensaje-card ${clasesCard}" id="mensaje-${mensaje.id}">
+                        <div class="mensaje-header">
+                            <div class="mensaje-info">
+                                <div class="mensaje-nombre">${mensaje.nombre || 'Sin nombre'}</div>
+                                <div class="mensaje-email">${mensaje.email || 'Sin email'}</div>
+                                <div class="mensaje-asunto">${mensaje.asunto_texto || mensaje.asunto || 'Sin asunto'}</div>
+                                <div class="mensaje-badges">${badges.join('')}</div>
+                            </div>
+                            <div class="mensaje-fecha">${fechaFormateada}</div>
+                        </div>
+                        <div class="mensaje-preview">${(mensaje.mensaje || '').substring(0, 150)}${mensaje.mensaje && mensaje.mensaje.length > 150 ? '...' : ''}</div>
+                        <div class="mensaje-detalle" id="detalle-${mensaje.id}">
+                            <div class="mensaje-texto">${mensaje.mensaje || 'Sin mensaje'}</div>
+                            <div class="mensaje-acciones">
+                                ${!mensaje.leido ? `
+                                    <button class="btn-accion btn-marcar-leido" onclick="marcarLeido('${mensaje.id}')">
+                                        <i class="fas fa-check"></i> Marcar como leído
+                                    </button>
+                                ` : ''}
+                                ${!mensaje.respondido ? `
+                                    <button class="btn-accion btn-marcar-respondido" onclick="marcarRespondido('${mensaje.id}')">
+                                        <i class="fas fa-reply"></i> Marcar como respondido
+                                    </button>
+                                ` : ''}
+                                <a href="mailto:${mensaje.email}?subject=Re: ${mensaje.asunto_texto || mensaje.asunto || 'Soporte AgroMarket'}" class="btn-accion btn-responder" style="text-decoration: none; display: inline-block;">
+                                    <i class="fas fa-envelope"></i> Responder por correo
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('mensajesList').innerHTML = mensajesHTML;
+
+            // Agregar event listeners para expandir/colapsar
+            document.querySelectorAll('.mensaje-card').forEach(card => {
+                card.addEventListener('click', function(e) {
+                    // No expandir si se hace clic en un botón
+                    if (e.target.closest('.btn-accion')) return;
+                    
+                    const mensajeId = this.id.replace('mensaje-', '');
+                    const detalle = document.getElementById(`detalle-${mensajeId}`);
+                    detalle.classList.toggle('expanded');
+                });
+            });
+        }
+
+        async function marcarLeido(mensajeId) {
+            try {
+                await db.collection('mensajes_soporte').doc(mensajeId).update({
+                    leido: true
+                });
+                await cargarMensajes();
+            } catch (error) {
+                console.error('Error marcando como leído:', error);
+                alert('Error al marcar como leído. Por favor, intenta nuevamente.');
+            }
+        }
+
+        async function marcarRespondido(mensajeId) {
+            try {
+                await db.collection('mensajes_soporte').doc(mensajeId).update({
+                    respondido: true,
+                    leido: true
+                });
+                await cargarMensajes();
+            } catch (error) {
+                console.error('Error marcando como respondido:', error);
+                alert('Error al marcar como respondido. Por favor, intenta nuevamente.');
+            }
+        }
+
+        function cerrarSesion() {
+            if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
+                auth.signOut().then(() => {
+                    window.location.href = '/auth/login';
+                }).catch(error => {
+                    console.error('Error al cerrar sesión:', error);
+                });
+            }
+        }
+
+        // Inicializar cuando se carga la página
+        document.addEventListener('DOMContentLoaded', initializeFirebase);
+    </script>
+</body>
+</html>
+
+

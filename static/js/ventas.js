@@ -161,6 +161,7 @@ async function cargarVentas() {
             renderVentas(ventasActivas);
         }
 
+
     } catch (error) {
         console.error('Error cargando ventas:', error);
         const loadingEl = document.getElementById('loading-ventas');
@@ -180,32 +181,7 @@ function renderVentas(ventasAMostrar = null) {
 
     const ventas = ventasAMostrar || ventasData;
 
-    const totalVentas = ventas.reduce((acc, v) => acc + v.total, 0);
-    const totalPagadas = ventas.filter(v => v.estado === 'pagado')
-        .reduce((acc, v) => acc + v.total, 0);
-    const totalPendientes = ventas.filter(v => v.estado === 'pendiente')
-        .reduce((acc, v) => acc + v.total, 0);
-
     container.innerHTML = `
-        <div class="ventas-stats">
-            <div class="stat-card">
-                <h3>Total de Ventas</h3>
-                <p class="stat-value">$${totalVentas.toFixed(2)}</p>
-            </div>
-            <div class="stat-card">
-                <h3>Ventas Pagadas</h3>
-                <p class="stat-value success">$${totalPagadas.toFixed(2)}</p>
-            </div>
-            <div class="stat-card">
-                <h3>Pendientes</h3>
-                <p class="stat-value warning">$${totalPendientes.toFixed(2)}</p>
-            </div>
-            <div class="stat-card">
-                <h3>Total de Pedidos</h3>
-                <p class="stat-value">${ventas.length}</p>
-            </div>
-        </div>
-
         <div class="ventas-table-container">
             <table class="ventas-table">
                 <thead>
@@ -719,9 +695,20 @@ async function procesarDevolucionVendedor(event) {
 
 async function cambiarEstadoPedido(compraId, nuevoEstado, indexVenta) {
     try {
-        if (!db) {
-            alert('Error: Base de datos no disponible');
-            return;
+        console.log('🔄 [CAMBIO ESTADO] Iniciando cambio de estado...', {
+            compraId,
+            nuevoEstado,
+            indexVenta
+        });
+
+        // Verificar que Firebase esté inicializado
+        if (!db || !auth) {
+            console.error('❌ [CAMBIO ESTADO] Firebase no está inicializado');
+            const ok = await inicializarFirebase();
+            if (!ok) {
+                alert('Error: No se pudo inicializar la base de datos. Por favor, recarga la página.');
+                return;
+            }
         }
 
         const compraRef = db.collection('compras').doc(compraId);
@@ -793,20 +780,34 @@ async function cambiarEstadoPedido(compraId, nuevoEstado, indexVenta) {
             return producto;
         });
 
+        // Asegurar que el vendedor esté en vendedores_ids para cumplir con las reglas de Firestore
+        let vendedoresIdsActualizados = compraData.vendedores_ids || [];
+        if (!vendedoresIdsActualizados.includes(user.uid)) {
+            vendedoresIdsActualizados = [...vendedoresIdsActualizados, user.uid];
+        }
+
         // Obtener el estado anterior antes de actualizar
         const estadoAnterior = compraData.estado_pedido || 'preparando';
         
         console.log('📝 [CAMBIO ESTADO] Intentando actualizar compra:', {
             compraId: compraId,
             nuevoEstado: nuevoEstado,
-            estadoAnterior: estadoAnterior
+            estadoAnterior: estadoAnterior,
+            vendedoresIds: vendedoresIdsActualizados
         });
         
         try {
+            console.log('📝 [CAMBIO ESTADO] Preparando actualización:', {
+                compraId,
+                nuevoEstado,
+                productosCount: productosActualizados.length
+            });
+
             await compraRef.update({
                 productos: productosActualizados,
                 estado_pedido: nuevoEstado,
-                fecha_actualizacion_estado: firebase.firestore.FieldValue.serverTimestamp()
+                fecha_actualizacion_estado: firebase.firestore.FieldValue.serverTimestamp(),
+                vendedores_ids: vendedoresIdsActualizados
             });
             console.log('✅ [CAMBIO ESTADO] Compra actualizada exitosamente');
         } catch (error) {
@@ -816,12 +817,23 @@ async function cambiarEstadoPedido(compraId, nuevoEstado, indexVenta) {
                 message: error.message,
                 stack: error.stack
             });
-            alert('Error al actualizar el estado del pedido: ' + error.message);
+            
+            let mensajeError = 'Error al actualizar el estado del pedido: ';
+            if (error.code === 'permission-denied') {
+                mensajeError += 'No tienes permisos para realizar esta acción. Verifica que seas el vendedor de este producto.';
+            } else if (error.code === 'not-found') {
+                mensajeError += 'No se encontró la compra.';
+            } else {
+                mensajeError += error.message || 'Error desconocido';
+            }
+            
+            alert(mensajeError);
             throw error;
         }
 
         console.log('✅ Estado del pedido actualizado:', nuevoEstado);
 
+        // Actualizar UI localmente antes de recargar
         if (ventasData[indexVenta]) {
             ventasData[indexVenta].estado_pedido = nuevoEstado;
             ventasData[indexVenta].productos = ventasData[indexVenta].productos.map(p => ({
@@ -830,7 +842,10 @@ async function cambiarEstadoPedido(compraId, nuevoEstado, indexVenta) {
             }));
         }
 
-        // Enviar correo de notificación de cambio de estado
+        // Recargar ventas primero para actualizar la vista
+        await cargarVentas();
+
+        // Enviar correo de notificación de cambio de estado (en segundo plano, no bloquea)
         // Asegurar que el compraId esté en los datos
         const compraDataConId = { 
             ...compraData, 
@@ -845,19 +860,35 @@ async function cambiarEstadoPedido(compraId, nuevoEstado, indexVenta) {
             emailCliente: compraData.usuario_email
         });
         
-        try {
-            await enviarCorreoCambioEstado(compraDataConId, nuevoEstado, estadoAnterior, user);
-            console.log('✅ Correo de cambio de estado enviado exitosamente');
-        } catch (emailError) {
-            console.warn('⚠️ Error enviando correo de cambio de estado:', emailError);
-            // No bloquear la actualización si falla el correo
-        }
-
-        await cargarVentas();
+        // Enviar correo en segundo plano sin bloquear
+        enviarCorreoCambioEstado(compraDataConId, nuevoEstado, estadoAnterior, user)
+            .then(() => {
+                console.log('✅ Correo de cambio de estado enviado exitosamente');
+            })
+            .catch((emailError) => {
+                console.warn('⚠️ Error enviando correo de cambio de estado:', emailError);
+                // No mostrar error al usuario, solo loguearlo
+            });
 
     } catch (error) {
         console.error('❌ Error cambiando estado del pedido:', error);
-        alert('Error al cambiar el estado del pedido. Por favor, intenta nuevamente.');
+        console.error('❌ Código del error:', error.code);
+        console.error('❌ Mensaje del error:', error.message);
+        console.error('❌ Stack completo:', error.stack);
+        
+        let mensajeError = 'Error al cambiar el estado del pedido. ';
+        
+        if (error.code === 'permission-denied') {
+            mensajeError += 'No tienes permisos para realizar esta acción. Verifica que seas el vendedor de este producto.';
+        } else if (error.code === 'not-found') {
+            mensajeError += 'No se encontró la compra. Por favor, recarga la página.';
+        } else if (error.message) {
+            mensajeError += error.message;
+        } else {
+            mensajeError += 'Por favor, intenta nuevamente.';
+        }
+        
+        alert(mensajeError);
     }
 }
 

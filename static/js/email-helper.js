@@ -145,7 +145,65 @@ async function enviarCorreoSolicitudPendiente(email, nombre, nombreTienda, ubica
     }
 }
 
+/**
+ * Enviar correo a administradores sobre nueva solicitud de vendedor
+ * Usa Flask-Mail directamente
+ * @param {string} solicitudId - ID de la solicitud
+ * @param {string} nombre - Nombre del usuario
+ * @param {string} email - Email del usuario
+ * @param {string} nombreTienda - Nombre de la tienda
+ * @param {string} ubicacion - Ubicación
+ * @param {string} fechaSolicitud - Fecha de la solicitud (formateada)
+ */
+async function enviarCorreoNuevaSolicitudAdmin(solicitudId, nombre, email, nombreTienda, ubicacion, fechaSolicitud) {
+    try {
+        console.log('📧 Preparando correo de nueva solicitud a administradores...');
+        console.log('📧 Datos:', { solicitudId, nombre, email, nombreTienda, ubicacion, fechaSolicitud });
+        
+        const response = await fetch('/admin/api/enviar-correo-nueva-solicitud', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                solicitud_id: solicitudId || '',
+                nombre: nombre || '',
+                email: email || '',
+                nombre_tienda: nombreTienda || '',
+                ubicacion: ubicacion || '',
+                fecha_solicitud: fechaSolicitud || '',
+                year: new Date().getFullYear().toString()
+            }),
+            credentials: 'same-origin'
+        });
+        
+        console.log('📧 Respuesta recibida:', response.status, response.statusText);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Error en respuesta:', response.status, errorText);
+            throw new Error(`Error ${response.status}: ${errorText}`);
+        }
+        
+        const result = await response.json();
+        console.log('📧 Resultado parseado:', result);
+        
+        if (!result.success) {
+            console.error('❌ Error en resultado:', result.error);
+            throw new Error(result.error || 'Error al enviar correo');
+        }
+        
+        console.log('✅ Correo de nueva solicitud enviado correctamente a administradores:', result);
+        return result;
+    } catch (error) {
+        console.error('❌ Error completo enviando correo de nueva solicitud a administradores:', error);
+        console.error('❌ Stack trace:', error.stack);
+        throw error;
+    }
+}
+
 // Exportar funciones para uso global
 window.enviarCorreoSolicitudAprobada = enviarCorreoSolicitudAprobada;
 window.enviarCorreoSolicitudRechazada = enviarCorreoSolicitudRechazada;
 window.enviarCorreoSolicitudPendiente = enviarCorreoSolicitudPendiente;
+window.enviarCorreoNuevaSolicitudAdmin = enviarCorreoNuevaSolicitudAdmin;

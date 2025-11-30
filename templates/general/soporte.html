@@ -215,6 +215,11 @@
     </div>
   </footer>
 
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
+  
   <script>
     function toggleFaq(element) {
       const faqItem = element.parentElement;
@@ -241,23 +246,86 @@
       }
     }
 
-    function enviarMensaje(event) {
+    async function enviarMensaje(event) {
       event.preventDefault();
       const form = event.target;
-      const formData = new FormData(form);
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const originalBtnText = submitBtn.innerHTML;
       
-      // Aquí podrías enviar el formulario a un endpoint del backend
-      // Por ahora, simplemente redirigimos al correo
-      const nombre = formData.get('nombre');
-      const email = formData.get('email');
-      const asunto = formData.get('asunto');
-      const mensaje = formData.get('mensaje');
+      // Deshabilitar el botón y mostrar estado de carga
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
       
-      const mailtoLink = `mailto:agromarket559@gmail.com?subject=${encodeURIComponent('Soporte AgroMarket: ' + asunto)}&body=${encodeURIComponent('Nombre: ' + nombre + '\nEmail: ' + email + '\n\nMensaje:\n' + mensaje)}`;
-      window.location.href = mailtoLink;
-      
-      // Mostrar mensaje de confirmación
-      alert('Se abrirá tu cliente de correo. Si prefieres, puedes copiar tu mensaje y enviarlo manualmente a agromarket559@gmail.com');
+      try {
+        const formData = {
+          nombre: document.getElementById('nombre').value.trim(),
+          email: document.getElementById('email').value.trim(),
+          asunto: document.getElementById('asunto').value.trim(),
+          mensaje: document.getElementById('mensaje').value.trim()
+        };
+        
+        // Validar campos
+        if (!formData.nombre || !formData.email || !formData.asunto || !formData.mensaje) {
+          alert('Por favor, completa todos los campos del formulario.');
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalBtnText;
+          return;
+        }
+        
+        // Enviar al backend
+        const response = await fetch('{{ url_for("general.enviar_soporte") }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          // Guardar el mensaje en Firestore para que los administradores puedan verlo
+          try {
+            // Verificar si Firebase está disponible
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+              const db = firebase.firestore();
+              const mensajeData = {
+                nombre: data.data.nombre,
+                email: data.data.email,
+                asunto: data.data.asunto,
+                asunto_texto: data.data.asunto_texto,
+                mensaje: data.data.mensaje,
+                fecha: firebase.firestore.FieldValue.serverTimestamp(),
+                leido: false,
+                respondido: false
+              };
+              
+              await db.collection('mensajes_soporte').add(mensajeData);
+              console.log('✅ Mensaje guardado en Firestore');
+            }
+          } catch (firestoreError) {
+            console.warn('⚠️ No se pudo guardar en Firestore (no crítico):', firestoreError);
+            // No es crítico si falla, el correo ya se envió
+          }
+          
+          // Mostrar mensaje de éxito
+          alert('✅ ' + data.message);
+          
+          // Limpiar el formulario
+          form.reset();
+        } else {
+          // Mostrar mensaje de error
+          alert('❌ Error: ' + (data.error || 'No se pudo enviar el mensaje. Por favor, intenta nuevamente.'));
+        }
+        
+      } catch (error) {
+        console.error('Error al enviar mensaje:', error);
+        alert('❌ Error al enviar el mensaje. Por favor, verifica tu conexión a internet e intenta nuevamente.');
+      } finally {
+        // Restaurar el botón
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
+      }
     }
   </script>
 </body>
