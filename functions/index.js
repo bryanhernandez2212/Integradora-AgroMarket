@@ -186,20 +186,69 @@ exports.sendSellerApprovalEmail = onCall(
     secrets: [smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, smtpFrom],
     cors: true, // Permitir CORS
     invoker: 'public', // Permitir llamadas públicas (sin autenticación)
+    timeoutSeconds: 60, // Timeout de 60 segundos para permitir resolución DNS y conexión SMTP
+    maxInstances: 10, // Máximo de instancias concurrentes
   },
   async (request) => {
+    console.log('='.repeat(80));
+    console.log('✅ FIREBASE FUNCTION: sendSellerApprovalEmail - INICIANDO');
+    console.log('='.repeat(80));
+    console.log('📥 Datos recibidos:', JSON.stringify({
+      email: request.data?.email,
+      nombre: request.data?.nombre,
+      nombreTienda: request.data?.nombreTienda,
+      ubicacion: request.data?.ubicacion
+    }, null, 2));
+    console.log('⏰ Timestamp:', new Date().toISOString());
+    
     try {
       const { email, nombre, nombreTienda, ubicacion } = request.data;
       
       if (!email || !nombre) {
+        console.error('❌ Validación falló: Email y nombre son requeridos');
         throw new HttpsError(
           'invalid-argument',
           'Email y nombre son requeridos'
         );
       }
       
+      console.log('✅ Validación exitosa');
+      console.log(`📧 Email: ${email}`);
+      console.log(`👤 Nombre: ${nombre}`);
+      console.log(`🏪 Tienda: ${nombreTienda || 'N/A'}`);
+      console.log(`📍 Ubicación: ${ubicacion || 'N/A'}`);
+      
       const config = getSMTPConfig();
-      const transporter = await createTransporter();
+      console.log('📧 Configuración SMTP obtenida');
+      
+      // Crear transporter con manejo mejorado de errores DNS
+      let transporter;
+      try {
+        transporter = await createTransporter();
+        console.log('✅ Transporter creado exitosamente');
+      } catch (transporterError) {
+        console.error('❌ Error creando transporter:', transporterError);
+        // Si el error es de DNS, intentar con IP directa
+        if (transporterError.message && transporterError.message.includes('EBADNAME')) {
+          console.warn('⚠️ Error DNS detectado, intentando con IP directa...');
+          // Forzar uso de IP directa
+          const gmailIP = '74.125.200.108';
+          const directConfig = {
+            host: gmailIP,
+            port: config.port,
+            secure: config.port === 465,
+            auth: config.auth,
+            tls: {
+              rejectUnauthorized: false,
+              servername: 'smtp.gmail.com'
+            }
+          };
+          transporter = nodemailer.createTransport(directConfig);
+          console.log('✅ Transporter creado con IP directa');
+        } else {
+          throw transporterError;
+        }
+      }
     
       const html = loadTemplate('solicitud-vendedor-aprobada', {
         nombre: nombre,
@@ -217,14 +266,46 @@ exports.sendSellerApprovalEmail = onCall(
         text: `Hola ${nombre},\n\nTu solicitud para ser vendedor en AgroMarket ha sido aprobada.\n\nNombre de tienda: ${nombreTienda || ''}\nUbicación: ${ubicacion || ''}\n\nAhora puedes acceder a tu panel de vendedor y comenzar a publicar productos.\n\n¡Bienvenido a AgroMarket!`,
       };
       
+      console.log('📤 Enviando correo con Nodemailer...');
+      console.log('   From:', mailOptions.from);
+      console.log('   To:', mailOptions.to);
+      console.log('   Subject:', mailOptions.subject);
+      
       const info = await transporter.sendMail(mailOptions);
+      
+      console.log('='.repeat(80));
+      console.log('✅ CORREO DE APROBACIÓN ENVIADO EXITOSAMENTE');
+      console.log('='.repeat(80));
+      console.log('📧 Email destinatario:', email);
+      console.log('👤 Nombre:', nombre);
+      console.log('📨 Message ID:', info.messageId);
+      console.log('📧 Response:', info.response);
+      console.log('⏰ Timestamp:', new Date().toISOString());
+      console.log('='.repeat(80));
       
       return {
         success: true,
         messageId: info.messageId,
+        response: info.response,
       };
     } catch (error) {
-      console.error('Error enviando correo de aprobación:', error);
+      console.error('='.repeat(80));
+      console.error('❌ ERROR ENVIANDO CORREO DE APROBACIÓN');
+      console.error('='.repeat(80));
+      console.error('📧 Email:', request.data?.email);
+      console.error('❌ Tipo de error:', error.constructor.name);
+      console.error('❌ Mensaje:', error.message);
+      console.error('❌ Stack:', error.stack);
+      
+      // Si es un error de DNS, proporcionar mensaje más específico
+      if (error.message && (error.message.includes('EBADNAME') || error.message.includes('queryA'))) {
+        console.error('⚠️ Error de DNS detectado, esto puede indicar un problema de red en Firebase Functions');
+        throw new HttpsError(
+          'internal',
+          'Error de conexión DNS al servidor de correo. Por favor, intenta nuevamente más tarde.'
+        );
+      }
+      
       throw new HttpsError(
         'internal',
         'Error al enviar correo: ' + error.message
@@ -241,20 +322,67 @@ exports.sendSellerRejectionEmail = onCall(
     secrets: [smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, smtpFrom],
     cors: true, // Permitir CORS
     invoker: 'public', // Permitir llamadas públicas (sin autenticación)
+    timeoutSeconds: 60, // Timeout de 60 segundos para permitir resolución DNS y conexión SMTP
+    maxInstances: 10, // Máximo de instancias concurrentes
   },
   async (request) => {
+    console.log('='.repeat(80));
+    console.log('❌ FIREBASE FUNCTION: sendSellerRejectionEmail - INICIANDO');
+    console.log('='.repeat(80));
+    console.log('📥 Datos recibidos:', JSON.stringify({
+      email: request.data?.email,
+      nombre: request.data?.nombre,
+      motivoRechazo: request.data?.motivoRechazo ? '***' : null
+    }, null, 2));
+    console.log('⏰ Timestamp:', new Date().toISOString());
+    
     try {
       const { email, nombre, motivoRechazo } = request.data;
       
       if (!email || !nombre) {
+        console.error('❌ Validación falló: Email y nombre son requeridos');
         throw new HttpsError(
           'invalid-argument',
           'Email y nombre son requeridos'
         );
       }
       
+      console.log('✅ Validación exitosa');
+      console.log(`📧 Email: ${email}`);
+      console.log(`👤 Nombre: ${nombre}`);
+      console.log(`📝 Motivo: ${motivoRechazo ? 'Proporcionado' : 'N/A'}`);
+      
       const config = getSMTPConfig();
-      const transporter = await createTransporter();
+      console.log('📧 Configuración SMTP obtenida');
+      
+      // Crear transporter con manejo mejorado de errores DNS
+      let transporter;
+      try {
+        transporter = await createTransporter();
+        console.log('✅ Transporter creado exitosamente');
+      } catch (transporterError) {
+        console.error('❌ Error creando transporter:', transporterError);
+        // Si el error es de DNS, intentar con IP directa
+        if (transporterError.message && transporterError.message.includes('EBADNAME')) {
+          console.warn('⚠️ Error DNS detectado, intentando con IP directa...');
+          // Forzar uso de IP directa
+          const gmailIP = '74.125.200.108';
+          const directConfig = {
+            host: gmailIP,
+            port: config.port,
+            secure: config.port === 465,
+            auth: config.auth,
+            tls: {
+              rejectUnauthorized: false,
+              servername: 'smtp.gmail.com'
+            }
+          };
+          transporter = nodemailer.createTransport(directConfig);
+          console.log('✅ Transporter creado con IP directa');
+        } else {
+          throw transporterError;
+        }
+      }
       
       let html = loadTemplate('solicitud-vendedor-rechazada', {
         nombre: nombre,
@@ -275,14 +403,46 @@ exports.sendSellerRejectionEmail = onCall(
         text: `Hola ${nombre},\n\nLamentamos informarte que tu solicitud para ser vendedor en AgroMarket no ha sido aprobada en esta ocasión.\n\n${motivoRechazo ? `Motivo: ${motivoRechazo}\n\n` : ''}Si deseas volver a intentar, puedes crear una nueva solicitud desde tu perfil.\n\nGracias por tu interés en AgroMarket.`,
       };
       
+      console.log('📤 Enviando correo con Nodemailer...');
+      console.log('   From:', mailOptions.from);
+      console.log('   To:', mailOptions.to);
+      console.log('   Subject:', mailOptions.subject);
+      
       const info = await transporter.sendMail(mailOptions);
+      
+      console.log('='.repeat(80));
+      console.log('✅ CORREO DE RECHAZO ENVIADO EXITOSAMENTE');
+      console.log('='.repeat(80));
+      console.log('📧 Email destinatario:', email);
+      console.log('👤 Nombre:', nombre);
+      console.log('📨 Message ID:', info.messageId);
+      console.log('📧 Response:', info.response);
+      console.log('⏰ Timestamp:', new Date().toISOString());
+      console.log('='.repeat(80));
       
       return {
         success: true,
         messageId: info.messageId,
+        response: info.response,
       };
     } catch (error) {
-      console.error('Error enviando correo de rechazo:', error);
+      console.error('='.repeat(80));
+      console.error('❌ ERROR ENVIANDO CORREO DE RECHAZO');
+      console.error('='.repeat(80));
+      console.error('📧 Email:', request.data?.email);
+      console.error('❌ Tipo de error:', error.constructor.name);
+      console.error('❌ Mensaje:', error.message);
+      console.error('❌ Stack:', error.stack);
+      
+      // Si es un error de DNS, proporcionar mensaje más específico
+      if (error.message && (error.message.includes('EBADNAME') || error.message.includes('queryA'))) {
+        console.error('⚠️ Error de DNS detectado, esto puede indicar un problema de red en Firebase Functions');
+        throw new HttpsError(
+          'internal',
+          'Error de conexión DNS al servidor de correo. Por favor, intenta nuevamente más tarde.'
+        );
+      }
+      
       throw new HttpsError(
         'internal',
         'Error al enviar correo: ' + error.message

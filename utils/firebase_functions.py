@@ -428,6 +428,145 @@ def send_order_status_change_email_via_functions(email, nombre, compra_id, nuevo
             print(f"❌ Error enviando notificación de cambio de estado a {email}")
         return False
 
+def send_seller_approval_email_via_functions(email, nombre, nombre_tienda=None, ubicacion=None):
+    """
+    Enviar correo de aprobación de solicitud de vendedor usando Firebase Functions
+    
+    Args:
+        email: Email del vendedor
+        nombre: Nombre del vendedor
+        nombre_tienda: Nombre de la tienda (opcional)
+        ubicacion: Ubicación (opcional)
+    
+    Returns:
+        bool: True si se envió correctamente
+    """
+    try:
+        current_app.logger.info("=" * 80)
+        current_app.logger.info("✅ INICIANDO ENVÍO DE CORREO DE APROBACIÓN")
+        current_app.logger.info("=" * 80)
+        current_app.logger.info(f"📧 Email: {email}")
+        current_app.logger.info(f"👤 Nombre: {nombre}")
+        current_app.logger.info(f"🏪 Tienda: {nombre_tienda or 'N/A'}")
+        current_app.logger.info(f"📍 Ubicación: {ubicacion or 'N/A'}")
+        current_app.logger.info(f"🔍 Llamando a Firebase Function: sendSellerApprovalEmail")
+    except RuntimeError:
+        print("=" * 80)
+        print("✅ INICIANDO ENVÍO DE CORREO DE APROBACIÓN")
+        print("=" * 80)
+        print(f"📧 Email: {email}")
+        print(f"🔍 Llamando a Firebase Function: sendSellerApprovalEmail")
+    
+    data = {
+        'email': email,
+        'nombre': nombre,
+        'nombreTienda': nombre_tienda or '',
+        'ubicacion': ubicacion or ''
+    }
+    
+    result = call_firebase_function('sendSellerApprovalEmail', data)
+    
+    try:
+        current_app.logger.info(f"📥 Respuesta recibida de Firebase Functions: {result}")
+    except RuntimeError:
+        print(f"📥 Respuesta recibida de Firebase Functions: {result}")
+    
+    if result and result.get('success'):
+        try:
+            current_app.logger.info("=" * 80)
+            current_app.logger.info("✅ CORREO DE APROBACIÓN ENVIADO EXITOSAMENTE VÍA FIREBASE FUNCTIONS")
+            current_app.logger.info(f"📧 Email: {email}")
+            if result.get('messageId'):
+                current_app.logger.info(f"📨 Message ID: {result.get('messageId')}")
+            current_app.logger.info("=" * 80)
+        except RuntimeError:
+            print("=" * 80)
+            print("✅ CORREO DE APROBACIÓN ENVIADO EXITOSAMENTE VÍA FIREBASE FUNCTIONS")
+            print("=" * 80)
+        return True
+    else:
+        error_msg = result.get('error', 'Error desconocido') if result else 'No se recibió respuesta de Firebase Functions'
+        try:
+            current_app.logger.error("=" * 80)
+            current_app.logger.error("❌ ERROR ENVIANDO CORREO DE APROBACIÓN")
+            current_app.logger.error(f"📧 Email: {email}")
+            current_app.logger.error(f"❌ Error: {error_msg}")
+            current_app.logger.error("=" * 80)
+        except RuntimeError:
+            print("=" * 80)
+            print("❌ ERROR ENVIANDO CORREO DE APROBACIÓN")
+            print(f"❌ Error: {error_msg}")
+            print("=" * 80)
+        return False
+
+def send_seller_rejection_email_via_functions(email, nombre, motivo_rechazo=''):
+    """
+    Enviar correo de rechazo de solicitud de vendedor usando Firebase Functions
+    
+    Args:
+        email: Email del vendedor
+        nombre: Nombre del vendedor
+        motivo_rechazo: Motivo del rechazo (opcional)
+    
+    Returns:
+        bool: True si se envió correctamente
+    """
+    try:
+        current_app.logger.info("=" * 80)
+        current_app.logger.info("❌ INICIANDO ENVÍO DE CORREO DE RECHAZO")
+        current_app.logger.info("=" * 80)
+        current_app.logger.info(f"📧 Email: {email}")
+        current_app.logger.info(f"👤 Nombre: {nombre}")
+        current_app.logger.info(f"📝 Motivo: {motivo_rechazo or 'N/A'}")
+        current_app.logger.info(f"🔍 Llamando a Firebase Function: sendSellerRejectionEmail")
+    except RuntimeError:
+        print("=" * 80)
+        print("❌ INICIANDO ENVÍO DE CORREO DE RECHAZO")
+        print("=" * 80)
+        print(f"📧 Email: {email}")
+        print(f"🔍 Llamando a Firebase Function: sendSellerRejectionEmail")
+    
+    data = {
+        'email': email,
+        'nombre': nombre,
+        'motivoRechazo': motivo_rechazo or 'No se proporcionó un motivo específico.'
+    }
+    
+    result = call_firebase_function('sendSellerRejectionEmail', data)
+    
+    try:
+        current_app.logger.info(f"📥 Respuesta recibida de Firebase Functions: {result}")
+    except RuntimeError:
+        print(f"📥 Respuesta recibida de Firebase Functions: {result}")
+    
+    if result and result.get('success'):
+        try:
+            current_app.logger.info("=" * 80)
+            current_app.logger.info("✅ CORREO DE RECHAZO ENVIADO EXITOSAMENTE VÍA FIREBASE FUNCTIONS")
+            current_app.logger.info(f"📧 Email: {email}")
+            if result.get('messageId'):
+                current_app.logger.info(f"📨 Message ID: {result.get('messageId')}")
+            current_app.logger.info("=" * 80)
+        except RuntimeError:
+            print("=" * 80)
+            print("✅ CORREO DE RECHAZO ENVIADO EXITOSAMENTE VÍA FIREBASE FUNCTIONS")
+            print("=" * 80)
+        return True
+    else:
+        error_msg = result.get('error', 'Error desconocido') if result else 'No se recibió respuesta de Firebase Functions'
+        try:
+            current_app.logger.error("=" * 80)
+            current_app.logger.error("❌ ERROR ENVIANDO CORREO DE RECHAZO")
+            current_app.logger.error(f"📧 Email: {email}")
+            current_app.logger.error(f"❌ Error: {error_msg}")
+            current_app.logger.error("=" * 80)
+        except RuntimeError:
+            print("=" * 80)
+            print("❌ ERROR ENVIANDO CORREO DE RECHAZO")
+            print(f"❌ Error: {error_msg}")
+            print("=" * 80)
+        return False
+
 def send_new_seller_application_notification_via_functions(solicitud_id, nombre, email, 
                                                            nombre_tienda=None, ubicacion=None, 
                                                            fecha_solicitud=None):
