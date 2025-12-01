@@ -271,20 +271,30 @@ def initialize_firebase_admin():
         
         # Verificar si hay credenciales en variable de entorno FIREBASE_SERVICE_ACCOUNT_JSON
         service_account_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
+        temp_file_path = None
         if service_account_json:
+            print(f"✅ Variable FIREBASE_SERVICE_ACCOUNT_JSON encontrada (longitud: {len(service_account_json)} caracteres)")
             try:
                 import json
                 import tempfile
-                # Validar que sea JSON válido
-                json.loads(service_account_json)
+                # Validar que sea JSON válido y extraer project_id si está disponible
+                service_account_data = json.loads(service_account_json)
+                if 'project_id' in service_account_data:
+                    project_id = service_account_data['project_id']
+                    print(f"📁 Project ID extraído del JSON: {project_id}")
+                
                 # Crear archivo temporal con las credenciales
                 temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
-                temp_file.write(service_account_json)
+                json.dump(service_account_data, temp_file, indent=2)  # Escribir JSON formateado
                 temp_file.close()
-                possible_paths.insert(1, temp_file.name)  # Insertar en posición 1
-                print(f"📁 Usando credenciales desde variable de entorno FIREBASE_SERVICE_ACCOUNT_JSON (archivo temporal)")
+                temp_file_path = temp_file.name
+                possible_paths.insert(1, temp_file_path)  # Insertar en posición 1
+                print(f"✅ Archivo temporal creado: {temp_file_path}")
+                print(f"📁 Usando credenciales desde variable de entorno FIREBASE_SERVICE_ACCOUNT_JSON")
             except (json.JSONDecodeError, Exception) as e:
                 print(f"⚠️ Error procesando FIREBASE_SERVICE_ACCOUNT_JSON: {str(e)}")
+                import traceback
+                print(f"   Traceback: {traceback.format_exc()}")
                 # Continuar con otras opciones
         
         print(f"🔍 Buscando archivo de credenciales en {len(possible_paths)} ubicaciones...")
@@ -300,12 +310,21 @@ def initialize_firebase_admin():
         if cred_path:
             print(f"📁 Usando credenciales desde: {cred_path}")
             current_app.logger.info(f"📁 Usando credenciales de Firebase desde: {cred_path}")
+            
+            # Cargar credenciales
             cred = credentials.Certificate(cred_path)
             
-            # Inicializar con credenciales y project ID
-            app = firebase_admin.initialize_app(cred, {
+            # Si las credenciales tienen project_id, usarlo (tiene prioridad)
+            if hasattr(cred, 'project_id') and cred.project_id:
+                project_id = cred.project_id
+                print(f"📁 Project ID desde credenciales: {project_id}")
+            
+            # Inicializar con credenciales y project ID explícito
+            init_options = {
                 'projectId': project_id
-            })
+            }
+            print(f"🔧 Inicializando Firebase Admin SDK con projectId: {project_id}")
+            app = firebase_admin.initialize_app(cred, init_options)
             print(f"✅ Firebase Admin SDK inicializado correctamente (project: {project_id})")
             current_app.logger.info(f"✅ Firebase Admin SDK inicializado correctamente (project: {project_id})")
             return app
