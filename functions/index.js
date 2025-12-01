@@ -63,7 +63,13 @@ async function createTransporter() {
     try {
       console.log(`🔍 Intentando resolver DNS para ${config.host}...`);
       const lookup = promisify(dns.lookup);
-      const result = await lookup(config.host, {family: 4});
+      // Intentar con timeout de 5 segundos
+      const result = await Promise.race([
+        lookup(config.host, {family: 4}),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('DNS lookup timeout')), 5000)
+        )
+      ]);
       resolvedHost = result.address;
       console.log(`✅ DNS resuelto: ${config.host} -> ${resolvedHost}`);
     } catch (dnsError) {
@@ -99,11 +105,24 @@ async function createTransporter() {
     connectionTimeout: 20000, // 20 segundos
     greetingTimeout: 10000, // 10 segundos  
     socketTimeout: 20000, // 20 segundos
-    // Lookup personalizado - usar familia IPv4
+    // Lookup personalizado - usar familia IPv4 con fallback robusto
     lookup: (hostname, options, callback) => {
+      // Si ya estamos usando IP directa, no hacer lookup
+      if (useDirectIP && resolvedHost) {
+        console.log(`✅ Usando IP directa para lookup: ${resolvedHost}`);
+        return callback(null, resolvedHost, 4);
+      }
+      
+      // Intentar lookup con IPv4
       dns.lookup(hostname, {family: 4, hints: dns.ADDRCONFIG}, (err, address, family) => {
         if (err) {
           console.warn(`⚠️ Error en lookup DNS para ${hostname}:`, err.message);
+          // Si es Gmail y falla, usar IP directa
+          if (hostname === 'smtp.gmail.com' || hostname.includes('gmail.com')) {
+            const gmailIP = '74.125.200.108';
+            console.log(`✅ Usando IP directa de Gmail como fallback: ${gmailIP}`);
+            return callback(null, gmailIP, 4);
+          }
           // Fallback: intentar con cualquier familia
           return dns.lookup(hostname, {family: 0}, callback);
         }
@@ -335,20 +354,67 @@ exports.sendPasswordResetCode = onCall(
     secrets: [smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, smtpFrom],
     cors: true, // Permitir CORS
     invoker: 'public', // Permitir llamadas públicas (sin autenticación)
+    timeoutSeconds: 60, // Timeout de 60 segundos para permitir resolución DNS y conexión SMTP
+    maxInstances: 10, // Máximo de instancias concurrentes
   },
   async (request) => {
+    console.log('='.repeat(80));
+    console.log('🔐 FIREBASE FUNCTION: sendPasswordResetCode - INICIANDO');
+    console.log('='.repeat(80));
+    console.log('📥 Datos recibidos:', JSON.stringify({
+      email: request.data?.email,
+      code: request.data?.code ? '***' : null,
+      nombre: request.data?.nombre
+    }, null, 2));
+    console.log('⏰ Timestamp:', new Date().toISOString());
+    
     try {
       const { email, code, nombre } = request.data;
       
       if (!email || !code) {
+        console.error('❌ Validación falló: Email y código son requeridos');
         throw new HttpsError(
           'invalid-argument',
           'Email y código son requeridos'
         );
       }
       
+      console.log('✅ Validación exitosa');
+      console.log(`📧 Email: ${email}`);
+      console.log(`🔑 Código: ${code.substring(0, 2)}***`);
+      console.log(`👤 Nombre: ${nombre || 'N/A'}`);
+      
       const config = getSMTPConfig();
-      const transporter = await createTransporter();
+      console.log('📧 Configuración SMTP obtenida');
+      
+      // Crear transporter con manejo mejorado de errores DNS
+      let transporter;
+      try {
+        transporter = await createTransporter();
+        console.log('✅ Transporter creado exitosamente');
+      } catch (transporterError) {
+        console.error('❌ Error creando transporter:', transporterError);
+        // Si el error es de DNS, intentar con IP directa
+        if (transporterError.message && transporterError.message.includes('EBADNAME')) {
+          console.warn('⚠️ Error DNS detectado, intentando con IP directa...');
+          // Forzar uso de IP directa
+          const gmailIP = '74.125.200.108';
+          const directConfig = {
+            host: gmailIP,
+            port: config.port,
+            secure: config.port === 465,
+            auth: config.auth,
+            tls: {
+              rejectUnauthorized: false,
+              servername: 'smtp.gmail.com'
+            }
+          };
+          transporter = nodemailer.createTransport(directConfig);
+          console.log('✅ Transporter creado con IP directa');
+        } else {
+          throw transporterError;
+        }
+      }
       
       // Asegurar que el nombre tenga un valor por defecto
       const nombreUsuario = nombre && nombre.trim() ? nombre.trim() : 'Usuario';
@@ -399,17 +465,46 @@ exports.sendPasswordResetCode = onCall(
         text: `Hola${nombre ? ' ' + nombre : ''},\n\nHemos recibido una solicitud para restablecer la contraseña de tu cuenta en AgroMarket.\n\nTu código de verificación es: ${code}\n\nEste código expirará en 15 minutos. Si no solicitaste este código, ignora este correo.\n\nIngresa este código en la página de recuperación de contraseña para continuar.`,
       };
       
-      console.log('📤 Enviando correo a', email, '...');
+      console.log('📤 Enviando correo con Nodemailer...');
+      console.log('   From:', mailOptions.from);
+      console.log('   To:', mailOptions.to);
+      console.log('   Subject:', mailOptions.subject);
+      
       const info = await transporter.sendMail(mailOptions);
       
-      console.log('✅ Código de recuperación enviado a:', email);
+      console.log('='.repeat(80));
+      console.log('✅ CÓDIGO DE RECUPERACIÓN ENVIADO EXITOSAMENTE');
+      console.log('='.repeat(80));
+      console.log('📧 Email destinatario:', email);
+      console.log('🔑 Código:', code.substring(0, 2) + '***');
+      console.log('📨 Message ID:', info.messageId);
+      console.log('📧 Response:', info.response);
+      console.log('⏰ Timestamp:', new Date().toISOString());
+      console.log('='.repeat(80));
       
       return {
         success: true,
         messageId: info.messageId,
+        response: info.response,
       };
     } catch (error) {
-      console.error('Error enviando código de recuperación:', error);
+      console.error('='.repeat(80));
+      console.error('❌ ERROR ENVIANDO CÓDIGO DE RECUPERACIÓN');
+      console.error('='.repeat(80));
+      console.error('📧 Email:', request.data?.email);
+      console.error('❌ Tipo de error:', error.constructor.name);
+      console.error('❌ Mensaje:', error.message);
+      console.error('❌ Stack:', error.stack);
+      
+      // Si es un error de DNS, proporcionar mensaje más específico
+      if (error.message && (error.message.includes('EBADNAME') || error.message.includes('queryA'))) {
+        console.error('⚠️ Error de DNS detectado, esto puede indicar un problema de red en Firebase Functions');
+        throw new HttpsError(
+          'internal',
+          'Error de conexión DNS al servidor de correo. Por favor, intenta nuevamente más tarde.'
+        );
+      }
+      
       throw new HttpsError(
         'internal',
         'Error al enviar correo: ' + error.message
@@ -500,8 +595,23 @@ exports.sendReceiptEmail = onCall(
     secrets: [smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, smtpFrom],
     cors: true, // Permitir CORS
     invoker: 'public', // Permitir llamadas públicas (sin autenticación)
+    timeoutSeconds: 60, // Timeout de 60 segundos para permitir resolución DNS y conexión SMTP
+    maxInstances: 10, // Máximo de instancias concurrentes
   },
   async (request) => {
+    console.log('='.repeat(80));
+    console.log('📧 FIREBASE FUNCTION: sendReceiptEmail - INICIANDO');
+    console.log('='.repeat(80));
+    console.log('📥 Datos recibidos:', JSON.stringify({
+      email: request.data?.email,
+      compraId: request.data?.compraId,
+      nombre: request.data?.nombre,
+      productosCount: request.data?.productos?.length || 0,
+      total: request.data?.total,
+      metodoPago: request.data?.metodoPago
+    }, null, 2));
+    console.log('⏰ Timestamp:', new Date().toISOString());
+    
     try {
       const {
         email,
@@ -518,14 +628,50 @@ exports.sendReceiptEmail = onCall(
       } = request.data;
       
       if (!email || !compraId || !productos || !Array.isArray(productos)) {
+        console.error('❌ Validación falló: Email, compraId y productos son requeridos');
         throw new HttpsError(
           'invalid-argument',
           'Email, compraId y productos son requeridos'
         );
       }
       
+      console.log('✅ Validación exitosa');
+      console.log(`📧 Email: ${email}`);
+      console.log(`📦 Compra ID: ${compraId}`);
+      console.log(`👤 Nombre: ${nombre || 'N/A'}`);
+      console.log(`📊 Productos: ${productos.length}`);
+      console.log(`💰 Total: $${total}`);
+      
       const config = getSMTPConfig();
-      const transporter = await createTransporter();
+      console.log('📧 Configuración SMTP obtenida');
+      
+      // Crear transporter con manejo mejorado de errores DNS
+      let transporter;
+      try {
+        transporter = await createTransporter();
+      } catch (transporterError) {
+        console.error('❌ Error creando transporter:', transporterError);
+        // Si el error es de DNS, intentar con IP directa
+        if (transporterError.message && transporterError.message.includes('EBADNAME')) {
+          console.warn('⚠️ Error DNS detectado, intentando con IP directa...');
+          // Forzar uso de IP directa
+          const gmailIP = '74.125.200.108';
+          const directConfig = {
+            host: gmailIP,
+            port: config.port,
+            secure: config.port === 465,
+            auth: config.auth,
+            tls: {
+              rejectUnauthorized: false,
+              servername: 'smtp.gmail.com'
+            }
+          };
+          transporter = nodemailer.createTransport(directConfig);
+          console.log('✅ Transporter creado con IP directa');
+        } else {
+          throw transporterError;
+        }
+      }
       
       // Construir HTML de productos
       let productosHtml = '';
@@ -550,8 +696,8 @@ exports.sendReceiptEmail = onCall(
       const metodoPagoTexto = metodoPagoLabels[metodoPago] || metodoPago || 'N/A';
       
       // Obtener datos de dirección
-      const ciudad = direccionEntrega?.ciudad || 'No especificada';
-      const telefono = direccionEntrega?.telefono || 'No especificado';
+      const ciudad = (direccionEntrega && direccionEntrega.ciudad) || 'No especificada';
+      const telefono = (direccionEntrega && direccionEntrega.telefono) || 'No especificado';
       
       // Cargar template y reemplazar variables
       const html = loadTemplate('receipt-email', {
@@ -605,16 +751,43 @@ Gracias por tu compra en AgroMarket 🍃`;
         text: text,
       };
       
+      console.log('📤 Enviando correo con Nodemailer...');
+      console.log('   From:', mailOptions.from);
+      console.log('   To:', mailOptions.to);
+      console.log('   Subject:', mailOptions.subject);
+      
       const info = await transporter.sendMail(mailOptions);
       
-      console.log('✅ Comprobante de compra enviado a:', email);
+      console.log('='.repeat(80));
+      console.log('✅ COMPROBANTE ENVIADO EXITOSAMENTE');
+      console.log('='.repeat(80));
+      console.log('📧 Email destinatario:', email);
+      console.log('📦 Compra ID:', compraId);
+      console.log('📨 Message ID:', info.messageId);
+      console.log('📧 Response:', info.response);
+      console.log('⏰ Timestamp:', new Date().toISOString());
+      console.log('='.repeat(80));
       
       return {
         success: true,
         messageId: info.messageId,
+        response: info.response,
       };
     } catch (error) {
-      console.error('Error enviando comprobante de compra:', error);
+      console.error('❌ Error enviando comprobante de compra:', error);
+      console.error('   Tipo de error:', error.constructor.name);
+      console.error('   Mensaje:', error.message);
+      console.error('   Stack:', error.stack);
+      
+      // Si es un error de DNS, proporcionar mensaje más específico
+      if (error.message && (error.message.includes('EBADNAME') || error.message.includes('queryA'))) {
+        console.error('⚠️ Error de DNS detectado, esto puede indicar un problema de red en Firebase Functions');
+        throw new HttpsError(
+          'internal',
+          'Error de conexión DNS al servidor de correo. Por favor, intenta nuevamente más tarde.'
+        );
+      }
+      
       throw new HttpsError(
         'internal',
         'Error al enviar correo: ' + error.message
