@@ -724,9 +724,11 @@ def forgot_password():
             current_app.logger.info(f"Enviando correo a {email} desde {mail_username} vía {mail_server}:{mail_port}")
             
             # Crear mensaje de correo
+            sender = current_app.config.get('MAIL_DEFAULT_SENDER', 'AgroMarket <agromarket559@gmail.com>')
             msg = Message(
                 subject='🔐 Código de Verificación - AgroMarket',
                 recipients=[email],
+                sender=sender,
                 html=f'''
                 <!DOCTYPE html>
                 <html>
