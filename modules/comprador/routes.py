@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, session, redirect, url_for, request, flash, jsonify, current_app
+from flask_mail import Message
 from modules.auth.decorators import login_required, role_required
 import stripe
 import os
@@ -394,21 +395,21 @@ def enviar_ticket_compra():
             current_app.logger.info(f"💳 Método de pago: {metodo_pago}")
             current_app.logger.info("=" * 80)
             
-                success = send_receipt_email_via_functions(
-                    email=email_cliente,
-                    nombre=nombre_cliente,
-                    compra_id=compra_id,
-                    fecha_compra=fecha_compra,
-                    productos=productos,
-                    subtotal=subtotal,
-                    envio=envio,
-                    impuestos=impuestos,
-                    total=total,
-                    metodo_pago=metodo_pago,
-                    direccion_entrega=direccion_entrega
-                )
-                
-                if success:
+            success = send_receipt_email_via_functions(
+                email=email_cliente,
+                nombre=nombre_cliente,
+                compra_id=compra_id,
+                fecha_compra=fecha_compra,
+                productos=productos,
+                subtotal=subtotal,
+                envio=envio,
+                impuestos=impuestos,
+                total=total,
+                metodo_pago=metodo_pago,
+                direccion_entrega=direccion_entrega
+            )
+            
+            if success:
                 current_app.logger.info("=" * 80)
                 current_app.logger.info("✅ COMPROBANTE ENVIADO EXITOSAMENTE")
                 current_app.logger.info("=" * 80)
@@ -418,25 +419,25 @@ def enviar_ticket_compra():
                 current_app.logger.info(f"📝 Mensaje: Ticket de compra enviado correctamente")
                 current_app.logger.info("=" * 80)
                 
-                    return jsonify({
-                        'success': True,
+                return jsonify({
+                    'success': True,
                     'message': 'Ticket de compra enviado correctamente',
                     'method': 'firebase_functions',
                     'method_display': 'Firebase Functions',
                     'email': email_cliente,
                     'compra_id': compra_id
-                    })
-                else:
+                })
+            else:
                 current_app.logger.error("❌ Firebase Functions falló al enviar comprobante")
                 return jsonify({
                     'success': False,
                     'error': 'No se pudo enviar el comprobante por correo. Por favor, contacta al administrador.'
                 }), 500
-            except Exception as e:
+        except Exception as e:
             current_app.logger.error(f"❌ Error con Firebase Functions: {str(e)}", exc_info=True)
             import traceback
             current_app.logger.error(f"   Traceback completo: {traceback.format_exc()}")
-        return jsonify({
+            return jsonify({
                 'success': False,
                 'error': f'Error al enviar comprobante: {str(e)}'
             }), 500
