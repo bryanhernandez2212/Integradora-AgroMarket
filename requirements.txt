@@ -6,3 +6,4 @@ email_validator
 firebase-admin
 itsdangerous
 requests
+python-dotenv

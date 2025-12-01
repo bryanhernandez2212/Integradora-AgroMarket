@@ -82,6 +82,8 @@ function loadTemplate(templateName, variables) {
 exports.sendSellerApprovalEmail = onCall(
   {
     secrets: [smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, smtpFrom],
+    cors: true, // Permitir CORS
+    invoker: 'public', // Permitir llamadas públicas (sin autenticación)
   },
   async (request) => {
     try {
@@ -135,6 +137,8 @@ exports.sendSellerApprovalEmail = onCall(
 exports.sendSellerRejectionEmail = onCall(
   {
     secrets: [smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, smtpFrom],
+    cors: true, // Permitir CORS
+    invoker: 'public', // Permitir llamadas públicas (sin autenticación)
   },
   async (request) => {
     try {
@@ -191,6 +195,8 @@ exports.sendSellerRejectionEmail = onCall(
 exports.sendSellerPendingEmail = onCall(
   {
     secrets: [smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, smtpFrom],
+    cors: true, // Permitir CORS
+    invoker: 'public', // Permitir llamadas públicas (sin autenticación)
   },
   async (request) => {
     try {
@@ -244,6 +250,8 @@ exports.sendSellerPendingEmail = onCall(
 exports.sendPasswordResetCode = onCall(
   {
     secrets: [smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, smtpFrom],
+    cors: true, // Permitir CORS
+    invoker: 'public', // Permitir llamadas públicas (sin autenticación)
   },
   async (request) => {
     try {
@@ -298,7 +306,12 @@ exports.sendPasswordResetCode = onCall(
  * Verificar código de recuperación de contraseña
  * Esta función solo verifica el código, no envía correos
  */
-exports.verifyPasswordResetCode = onCall(async (request) => {
+exports.verifyPasswordResetCode = onCall(
+  {
+    cors: true, // Permitir CORS
+    invoker: 'public', // Permitir llamadas públicas (sin autenticación)
+  },
+  async (request) => {
   try {
     const { email, code } = request.data;
     
@@ -369,6 +382,8 @@ exports.verifyPasswordResetCode = onCall(async (request) => {
 exports.sendReceiptEmail = onCall(
   {
     secrets: [smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, smtpFrom],
+    cors: true, // Permitir CORS
+    invoker: 'public', // Permitir llamadas públicas (sin autenticación)
   },
   async (request) => {
     try {
@@ -498,6 +513,8 @@ Gracias por tu compra en AgroMarket 🍃`;
 exports.sendOrderStatusChangeEmail = onCall(
   {
     secrets: [smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, smtpFrom],
+    cors: true, // Permitir CORS
+    invoker: 'public', // Permitir llamadas públicas (sin autenticación)
   },
   async (request) => {
     try {
@@ -611,6 +628,8 @@ Gracias por tu compra en AgroMarket 🍃`;
 exports.sendNewSellerApplicationNotification = onCall(
   {
     secrets: [smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, smtpFrom],
+    cors: true, // Permitir CORS
+    invoker: 'public', // Permitir llamadas públicas (sin autenticación)
   },
   async (request) => {
     try {
