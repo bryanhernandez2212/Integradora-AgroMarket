@@ -272,6 +272,22 @@ def initialize_firebase_admin():
         # Verificar si hay credenciales en variable de entorno FIREBASE_SERVICE_ACCOUNT_JSON
         service_account_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
         temp_file_path = None
+        
+        # Debug: verificar si la variable existe (incluso si está vacía)
+        if 'FIREBASE_SERVICE_ACCOUNT_JSON' in os.environ:
+            print(f"🔍 Variable FIREBASE_SERVICE_ACCOUNT_JSON existe en os.environ")
+            if service_account_json:
+                print(f"   Longitud del valor: {len(service_account_json)} caracteres")
+                print(f"   Primeros 50 caracteres: {service_account_json[:50]}...")
+            else:
+                print(f"   ⚠️ Variable existe pero está vacía o es None")
+        else:
+            print(f"❌ Variable FIREBASE_SERVICE_ACCOUNT_JSON NO existe en os.environ")
+            print(f"   Variables de entorno disponibles que contienen 'FIREBASE':")
+            for key in os.environ.keys():
+                if 'FIREBASE' in key.upper() or 'GOOGLE' in key.upper():
+                    print(f"      - {key}")
+        
         if service_account_json:
             print(f"✅ Variable FIREBASE_SERVICE_ACCOUNT_JSON encontrada (longitud: {len(service_account_json)} caracteres)")
             try:

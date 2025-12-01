@@ -1047,11 +1047,16 @@
                         const userData = userDoc.exists ? userDoc.data() : {};
                         // Enviar correo sin esperar (fire and forget) pero con mejor manejo de errores
                         enviarCorreoEnBackground(compraId, user.email, userData, carritoItems, totalCarritoDin, 'tarjeta', direccionData)
-                            .then(() => {
-                                console.log('✅ Comprobante de compra enviado exitosamente');
+                            .then((result) => {
+                                console.log('✅ Comprobante de compra enviado exitosamente:', result);
+                                // Mostrar notificación al usuario si es posible
+                                if (typeof mostrarNotificacion === 'function') {
+                                    mostrarNotificacion('📧 Comprobante de compra enviado a tu correo', 'success');
+                                }
                             })
                             .catch(err => {
                                 console.error('❌ Error enviando correo (no crítico):', err);
+                                // No bloquear la redirección, pero registrar el error
                             });
                     } else {
                         console.warn('⚠️ No se puede enviar correo: compraId o user no disponible', { compraId, user: !!user });
@@ -1135,11 +1140,16 @@
                     const userData = userDoc.exists ? userDoc.data() : {};
                     // Enviar correo sin esperar (fire and forget) pero con mejor manejo de errores
                     enviarCorreoEnBackground(compraId, user.email, userData, carritoItems, totalCarritoDin, metodoPago, direccionData)
-                        .then(() => {
-                            console.log('✅ Comprobante de compra enviado exitosamente');
+                        .then((result) => {
+                            console.log('✅ Comprobante de compra enviado exitosamente:', result);
+                            // Mostrar notificación al usuario si es posible
+                            if (typeof mostrarNotificacion === 'function') {
+                                mostrarNotificacion('📧 Comprobante de compra enviado a tu correo', 'success');
+                            }
                         })
                         .catch(err => {
                             console.error('❌ Error enviando correo (no crítico):', err);
+                            // No bloquear la redirección, pero registrar el error
                         });
                 } else {
                     console.warn('⚠️ No se puede enviar correo: compraId o user no disponible', { compraId, user: !!user });
@@ -1488,12 +1498,44 @@
                 
                 if (response.ok) {
                     const result = await response.json();
-                    console.log('✅ Ticket de compra enviado por correo exitosamente:', result);
+                    console.log('='.repeat(80));
+                    console.log('✅ RESPUESTA DEL SERVIDOR - COMPROBANTE DE COMPRA');
+                    console.log('='.repeat(80));
+                    console.log('📧 Email:', result.email || emailCliente);
+                    console.log('📦 Compra ID:', result.compra_id || compraId);
+                    console.log('✅ Success:', result.success);
+                    console.log('📝 Message:', result.message);
+                    console.log('🔧 Method:', result.method || 'N/A');
+                    console.log('🔧 Method Display:', result.method_display || result.method || 'N/A');
+                    console.log('📨 Message ID:', result.messageId || 'N/A');
+                    console.log('⏰ Timestamp:', new Date().toISOString());
+                    console.log('='.repeat(80));
+                    
+                    if (result.success) {
+                        if (result.method === 'firebase_functions') {
+                            console.log('');
+                            console.log('✅✅✅ CONFIRMADO: Correo enviado vía FIREBASE FUNCTIONS ✅✅✅');
+                            console.log('   El comprobante fue enviado usando Firebase Functions');
+                            console.log('   Revisa tu correo electrónico para ver el comprobante');
+                            console.log('');
+                        } else {
+                            console.log('⚠️ Método de envío:', result.method || 'desconocido');
+                            console.log('⚠️ No se pudo confirmar el método de envío');
+                        }
+                    }
                     return result;
                 } else {
                     const errorText = await response.text();
                     console.error('⚠️ Error enviando ticket por correo:', response.status, errorText);
-                    throw new Error(`Error ${response.status}: ${errorText}`);
+                    // Intentar parsear el error como JSON
+                    let errorMessage = errorText;
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        errorMessage = errorJson.error || errorJson.message || errorText;
+                    } catch (e) {
+                        // Si no es JSON, usar el texto tal cual
+                    }
+                    throw new Error(`Error ${response.status}: ${errorMessage}`);
                 }
             } catch (emailError) {
                 console.error('❌ Error enviando ticket por correo:', emailError);
