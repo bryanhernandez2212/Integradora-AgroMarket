@@ -60,13 +60,14 @@ class ProductionConfig(Config):
     SESSION_COOKIE_SAMESITE = 'Lax'
     PERMANENT_SESSION_LIFETIME = 86400  # 24 horas
     
-    # Configuración de Flask-Mail para producción - REQUIERE variables de entorno
-    MAIL_SERVER = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
-    MAIL_PORT = int(os.environ.get('MAIL_PORT', 587))
+    # Configuración de Flask-Mail para producción
+    # Usar variables de entorno si están disponibles, sino usar valores por defecto (igual que en desarrollo)
+    MAIL_SERVER = os.environ.get('MAIL_SERVER') or 'smtp.gmail.com'
+    MAIL_PORT = int(os.environ.get('MAIL_PORT') or 587)
     MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'true').lower() in ['true', 'on', '1']
-    MAIL_USERNAME = os.environ.get('MAIL_USERNAME')  # REQUERIDO en producción
-    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')  # REQUERIDO en producción
-    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER') or (os.environ.get('MAIL_USERNAME') and f'AgroMarket <{os.environ.get("MAIL_USERNAME")}>')
+    MAIL_USERNAME = os.environ.get('MAIL_USERNAME') or 'agromarket559@gmail.com'  # Mismo valor que en desarrollo
+    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD') or 'xnzf mxvp vjbi iioj'  # Mismo valor que en desarrollo
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER') or 'AgroMarket <agromarket559@gmail.com>'
 
 # Configuración por defecto
 config = {

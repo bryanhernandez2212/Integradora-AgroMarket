@@ -5,6 +5,8 @@ const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const dns = require('dns');
+const {promisify} = require('util');
 
 // Definir secrets
 const smtpHost = defineSecret('SMTP_HOST');
@@ -36,18 +38,82 @@ function getSMTPConfig() {
 /**
  * Crear transporter de Nodemailer
  */
-function createTransporter() {
+/**
+ * Crear transporter de Nodemailer con resolución DNS mejorada
+ */
+async function createTransporter() {
   const config = getSMTPConfig();
   
-  return nodemailer.createTransport({
-    host: config.host,
+  // Para Firebase Functions, el error "queryA EBADNAME smtp.gmail.com" 
+  // indica un problema de resolución DNS. Intentar resolver DNS manualmente:
+  
+  let resolvedHost = config.host;
+  
+  // Intentar resolver el hostname a IP si es smtp.gmail.com
+  if (config.host === 'smtp.gmail.com' || config.host.includes('gmail.com')) {
+    try {
+      console.log(`🔍 Resolviendo DNS para ${config.host}...`);
+      const lookup = promisify(dns.lookup);
+      const result = await lookup(config.host, {family: 4});
+      resolvedHost = result.address;
+      console.log(`✅ DNS resuelto: ${config.host} -> ${resolvedHost}`);
+    } catch (dnsError) {
+      console.warn(`⚠️ No se pudo resolver DNS para ${config.host}:`, dnsError.message);
+      console.warn('⚠️ Usando hostname original, el transporter puede fallar');
+      // Continuar con el hostname original
+    }
+  }
+  
+  const transportConfig = {
+    host: resolvedHost,
     port: config.port,
-    secure: config.secure,
+    secure: config.port === 465, // true solo para puerto 465 (SSL)
     auth: {
       user: config.auth.user,
       pass: config.auth.pass,
     },
-  });
+    // Configuración para resolver problemas de DNS en Firebase Functions
+    tls: {
+      rejectUnauthorized: false, // Permitir certificados para evitar problemas en producción
+      minVersion: 'TLSv1.2',
+      servername: config.host // Usar el hostname original para SNI, no la IP
+    },
+    // Timeouts aumentados para conexiones lentas
+    connectionTimeout: 20000, // 20 segundos
+    greetingTimeout: 10000, // 10 segundos  
+    socketTimeout: 20000, // 20 segundos
+    // Lookup personalizado - usar familia IPv4
+    lookup: (hostname, options, callback) => {
+      dns.lookup(hostname, {family: 4, hints: dns.ADDRCONFIG}, (err, address, family) => {
+        if (err) {
+          console.warn(`⚠️ Error en lookup DNS para ${hostname}:`, err.message);
+          // Fallback: intentar con cualquier familia
+          return dns.lookup(hostname, {family: 0}, callback);
+        }
+        callback(err, address, family);
+      });
+    }
+  };
+  
+  // Configuración específica para puerto 587 (STARTTLS)
+  if (config.port === 587) {
+    transportConfig.requireTLS = true;
+    transportConfig.secure = false;
+  }
+  
+  // Configuración específica para puerto 465 (SSL directo)
+  if (config.port === 465) {
+    transportConfig.secure = true;
+  }
+  
+  console.log(`📧 Configurando Nodemailer: host=${resolvedHost} (${config.host}), port=${config.port}, secure=${transportConfig.secure}`);
+  
+  try {
+    return nodemailer.createTransport(transportConfig);
+  } catch (error) {
+    console.error('❌ Error creando transporter:', error);
+    throw error;
+  }
 }
 
 /**
@@ -97,7 +163,7 @@ exports.sendSellerApprovalEmail = onCall(
       }
       
       const config = getSMTPConfig();
-      const transporter = createTransporter();
+      const transporter = await createTransporter();
     
       const html = loadTemplate('solicitud-vendedor-aprobada', {
         nombre: nombre,
@@ -152,7 +218,7 @@ exports.sendSellerRejectionEmail = onCall(
       }
       
       const config = getSMTPConfig();
-      const transporter = createTransporter();
+      const transporter = await createTransporter();
       
       let html = loadTemplate('solicitud-vendedor-rechazada', {
         nombre: nombre,
@@ -210,7 +276,7 @@ exports.sendSellerPendingEmail = onCall(
       }
       
       const config = getSMTPConfig();
-      const transporter = createTransporter();
+      const transporter = await createTransporter();
       
       const html = loadTemplate('solicitud-vendedor-pendiente', {
         nombre: nombre,
@@ -265,7 +331,7 @@ exports.sendPasswordResetCode = onCall(
       }
       
       const config = getSMTPConfig();
-      const transporter = createTransporter();
+      const transporter = await createTransporter();
       
       // Asegurar que el nombre tenga un valor por defecto
       const nombreUsuario = nombre && nombre.trim() ? nombre.trim() : 'Usuario';
@@ -276,6 +342,38 @@ exports.sendPasswordResetCode = onCall(
         year: new Date().getFullYear().toString(),
       });
       
+      // Verificar conexión SMTP primero
+      console.log('🔍 Verificando conexión SMTP con', config.host, '...');
+      try {
+        await transporter.verify();
+        console.log('✅ Conexión SMTP verificada correctamente');
+      } catch (verifyError) {
+        console.warn('⚠️ Advertencia al verificar conexión SMTP:', verifyError.message);
+        // Continuar de todos modos - a veces la verificación falla pero el envío funciona
+      }
+      
+      // Guardar código en Firestore antes de enviar correo
+      try {
+        const db = admin.firestore();
+        const codeHash = crypto.createHash('sha256').update(code.toString()).digest('hex');
+        const expiresAt = new Date();
+        expiresAt.setMinutes(expiresAt.getMinutes() + 15); // Expira en 15 minutos
+        
+        await db.collection('password_reset_codes').doc(codeHash).set({
+          email: email.toLowerCase(),
+          code_hash: codeHash,
+          expires_at: admin.firestore.Timestamp.fromDate(expiresAt),
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+          used: false,
+          verified: false
+        });
+        
+        console.log('✅ Código guardado en Firestore');
+      } catch (firestoreError) {
+        console.warn('⚠️ Error guardando código en Firestore:', firestoreError.message);
+        // Continuar con el envío aunque falle guardar en Firestore
+      }
+      
       const mailOptions = {
         from: config.from,
         to: email,
@@ -284,6 +382,7 @@ exports.sendPasswordResetCode = onCall(
         text: `Hola${nombre ? ' ' + nombre : ''},\n\nHemos recibido una solicitud para restablecer la contraseña de tu cuenta en AgroMarket.\n\nTu código de verificación es: ${code}\n\nEste código expirará en 15 minutos. Si no solicitaste este código, ignora este correo.\n\nIngresa este código en la página de recuperación de contraseña para continuar.`,
       };
       
+      console.log('📤 Enviando correo a', email, '...');
       const info = await transporter.sendMail(mailOptions);
       
       console.log('✅ Código de recuperación enviado a:', email);
@@ -409,7 +508,7 @@ exports.sendReceiptEmail = onCall(
       }
       
       const config = getSMTPConfig();
-      const transporter = createTransporter();
+      const transporter = await createTransporter();
       
       // Construir HTML de productos
       let productosHtml = '';
@@ -537,7 +636,7 @@ exports.sendOrderStatusChangeEmail = onCall(
       }
       
       const config = getSMTPConfig();
-      const transporter = createTransporter();
+      const transporter = await createTransporter();
       
       // Mapeo de estados a etiquetas en español
       const estadoLabels = {
@@ -710,7 +809,7 @@ exports.sendNewSellerApplicationNotification = onCall(
       console.log(`📧 Enviando notificación a ${adminEmails.length} administrador(es):`, adminEmails);
       
       const config = getSMTPConfig();
-      const transporter = createTransporter();
+      const transporter = await createTransporter();
       
       // Cargar template y reemplazar variables
       const html = loadTemplate('new-seller-application-admin', {

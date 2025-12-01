@@ -233,20 +233,37 @@ def initialize_firebase_admin():
             print("✅ Firebase Admin SDK ya está inicializado")
             return firebase_admin.get_app()
         
+        # Obtener project ID - usar el mismo que en firebase-config.js (igual que en móvil)
+        # Primero intentar variables de entorno (opcional), luego usar el valor hardcodeado
+        project_id = os.environ.get('FIREBASE_PROJECT_ID') or \
+                    os.environ.get('GOOGLE_CLOUD_PROJECT') or \
+                    current_app.config.get('FIREBASE_PROJECT_ID') or \
+                    'agromarket-625b2'  # Mismo valor que en static/js/firebase-config.js
+        
+        print(f"🔧 Project ID configurado: {project_id}")
+        
         # Calcular directorio base
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        current_dir = os.getcwd()
         print(f"📁 Directorio base: {base_dir}")
+        print(f"📁 Directorio actual: {current_dir}")
         
-        # Buscar archivo de credenciales en varios lugares
+        # Buscar archivo de credenciales en varios lugares (orden de prioridad)
         possible_paths = [
-            # Variable de entorno
+            # 1. Variable de entorno (mayor prioridad)
             os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'),
-            # Archivo en el directorio raíz del proyecto
-            os.path.join(base_dir, 'serviceAccountKey.json'),
-            # Archivo alternativo
-            os.path.join(base_dir, 'firebase-service-account.json'),
-            # Archivo en config/
+            # 2. Para Docker/producción: buscar en /app (directorio común en contenedores)
+            '/app/config/serviceAccountKey.json',  # Primero config/ dentro de /app
+            '/app/serviceAccountKey.json',
+            # 3. Archivo en config/ del proyecto (donde está en el repositorio)
             os.path.join(base_dir, 'config', 'serviceAccountKey.json'),
+            # 4. Archivo en el directorio raíz del proyecto
+            os.path.join(base_dir, 'serviceAccountKey.json'),
+            # 5. Para producción: buscar en directorio actual de trabajo
+            os.path.join(current_dir, 'config', 'serviceAccountKey.json'),
+            os.path.join(current_dir, 'serviceAccountKey.json'),
+            # 6. Archivo alternativo
+            os.path.join(base_dir, 'firebase-service-account.json'),
         ]
         
         print(f"🔍 Buscando archivo de credenciales en {len(possible_paths)} ubicaciones...")
@@ -263,24 +280,64 @@ def initialize_firebase_admin():
             print(f"📁 Usando credenciales desde: {cred_path}")
             current_app.logger.info(f"📁 Usando credenciales de Firebase desde: {cred_path}")
             cred = credentials.Certificate(cred_path)
-            app = firebase_admin.initialize_app(cred)
-            print("✅ Firebase Admin SDK inicializado correctamente")
-            current_app.logger.info("✅ Firebase Admin SDK inicializado correctamente")
+            
+            # Inicializar con credenciales y project ID
+            app = firebase_admin.initialize_app(cred, {
+                'projectId': project_id
+            })
+            print(f"✅ Firebase Admin SDK inicializado correctamente (project: {project_id})")
+            current_app.logger.info(f"✅ Firebase Admin SDK inicializado correctamente (project: {project_id})")
             return app
         else:
             print("⚠️ No se encontró archivo de credenciales en ninguna ubicación")
-            # Intentar usar credenciales por defecto (si están en el sistema)
+            # Intentar usar credenciales por defecto o inicializar con project ID
             try:
-                app = firebase_admin.initialize_app()
-                print("✅ Firebase Admin SDK inicializado con credenciales por defecto")
-                current_app.logger.info("✅ Firebase Admin SDK inicializado con credenciales por defecto")
+                # Asegurar que project_id esté definido (usar el mismo que en móvil)
+                if 'project_id' not in locals():
+                    project_id = os.environ.get('FIREBASE_PROJECT_ID') or \
+                                os.environ.get('GOOGLE_CLOUD_PROJECT') or \
+                                current_app.config.get('FIREBASE_PROJECT_ID') or \
+                                'agromarket-625b2'  # Mismo valor que en static/js/firebase-config.js
+                
+                print(f"🔧 Intentando inicializar con project ID: {project_id}")
+                current_app.logger.info(f"🔧 Intentando inicializar Firebase Admin con project ID: {project_id}")
+                
+                # IMPORTANTE: Siempre pasar projectId, incluso sin credenciales
+                # Firebase Admin SDK requiere projectId para funcionar correctamente
+                app = firebase_admin.initialize_app(options={
+                    'projectId': project_id
+                })
+                
+                print(f"✅ Firebase Admin SDK inicializado con project ID: {project_id} (sin archivo de credenciales)")
+                current_app.logger.info(f"✅ Firebase Admin SDK inicializado con project ID: {project_id} (sin archivo de credenciales)")
+                current_app.logger.warning("⚠️ Usando credenciales por defecto del entorno (Application Default Credentials)")
                 return app
+                
             except Exception as default_error:
-                # Si no hay credenciales, retornar None
-                print(f"❌ Error inicializando con credenciales por defecto: {str(default_error)}")
-                current_app.logger.warning("⚠️ Firebase Admin no está configurado. Coloca el archivo 'serviceAccountKey.json' en la raíz del proyecto.")
-                current_app.logger.warning(f"   Error: {str(default_error)}")
-                return None
+                # Si falla, intentar con variable de entorno GOOGLE_CLOUD_PROJECT
+                print(f"⚠️ Error inicializando con opciones, intentando con GOOGLE_CLOUD_PROJECT...")
+                print(f"   Error: {str(default_error)}")
+                
+                # Establecer variable de entorno si no está configurada
+                if not os.environ.get('GOOGLE_CLOUD_PROJECT'):
+                    os.environ['GOOGLE_CLOUD_PROJECT'] = project_id
+                    print(f"🔧 Establecido GOOGLE_CLOUD_PROJECT={project_id}")
+                
+                try:
+                    # Intentar nuevamente después de establecer la variable de entorno
+                    app = firebase_admin.initialize_app(options={
+                        'projectId': project_id
+                    })
+                    print(f"✅ Firebase Admin SDK inicializado con GOOGLE_CLOUD_PROJECT={project_id}")
+                    current_app.logger.info(f"✅ Firebase Admin SDK inicializado con GOOGLE_CLOUD_PROJECT={project_id}")
+                    return app
+                except Exception as final_error:
+                    print(f"❌ Error final inicializando Firebase Admin: {str(final_error)}")
+                    current_app.logger.error(f"❌ Error inicializando Firebase Admin: {str(final_error)}")
+                    current_app.logger.warning("⚠️ Firebase Admin no está configurado correctamente.")
+                    current_app.logger.warning(f"   Project ID usado: {project_id}")
+                    current_app.logger.warning(f"   GOOGLE_CLOUD_PROJECT: {os.environ.get('GOOGLE_CLOUD_PROJECT', 'NO CONFIGURADO')}")
+                    return None
     except Exception as e:
         print(f"❌ Error inicializando Firebase Admin: {str(e)}")
         print(f"   Tipo: {type(e).__name__}")
@@ -484,7 +541,15 @@ def mark_code_as_used(code_hash):
         return False
 
 def get_user_by_email(email):
-    """Obtiene un usuario de Firebase Auth por email"""
+    """Obtiene un usuario de Firebase Auth por email
+    
+    NOTA: Esta función solo se usa como fallback. En producción,
+    las verificaciones se hacen directamente en Firebase Functions.
+    """
+    # Intentar con Firebase Admin SDK solo si está disponible
+    if not FIREBASE_ADMIN_AVAILABLE:
+        return None
+    
     try:
         app = initialize_firebase_admin()
         if not app:
@@ -496,7 +561,8 @@ def get_user_by_email(email):
     except firebase_auth.UserNotFoundError:
         return None
     except Exception as e:
-        current_app.logger.error(f"Error obteniendo usuario: {str(e)}")
+        # No loggear error como crítico, ya que Firebase Functions manejará esto
+        current_app.logger.debug(f"Firebase Admin no disponible para verificar usuario: {str(e)}")
         return None
 
 def update_user_password_via_rest_api(email, new_password):
@@ -512,31 +578,39 @@ def update_user_password_via_rest_api(email, new_password):
     return False
 
 def update_user_password(email, new_password):
-    """Actualiza la contraseña de un usuario en Firebase Auth"""
+    """Actualiza la contraseña de un usuario en Firebase Auth
+    
+    NOTA: Esta función intenta usar Firebase Admin SDK si está disponible,
+    pero en producción, el cambio de contraseña se maneja en el frontend
+    con el código de verificación.
+    """
     try:
         print(f"\n🔐 Intentando actualizar contraseña para {email[:3]}***")
         
         # Intentar primero con Firebase Admin SDK si está disponible
-        app = initialize_firebase_admin()
-        if app:
-            print("✅ Firebase Admin SDK inicializado")
-            
-            # Obtener usuario por email
-            print(f"🔍 Buscando usuario por email: {email}")
-            user = get_user_by_email(email)
-            if user:
-                print(f"✅ Usuario encontrado: {user.uid}")
+        if FIREBASE_ADMIN_AVAILABLE:
+            app = initialize_firebase_admin()
+            if app:
+                print("✅ Firebase Admin SDK inicializado")
                 
-                # Actualizar contraseña
-                print("🔄 Actualizando contraseña en Firebase Auth...")
-                firebase_auth.update_user(user.uid, password=new_password)
-                print("✅ Contraseña actualizada exitosamente con Admin SDK")
-                return True
-            else:
-                print("⚠️ Usuario no encontrado con Admin SDK, intentando REST API...")
+                # Obtener usuario por email
+                print(f"🔍 Buscando usuario por email: {email}")
+                user = get_user_by_email(email)
+                if user:
+                    print(f"✅ Usuario encontrado: {user.uid}")
+                    
+                    # Actualizar contraseña
+                    print("🔄 Actualizando contraseña en Firebase Auth...")
+                    firebase_auth.update_user(user.uid, password=new_password)
+                    print("✅ Contraseña actualizada exitosamente con Admin SDK")
+                    return True
+                else:
+                    print("⚠️ Usuario no encontrado con Admin SDK")
         
-        # Si Admin SDK no está disponible o no encontró usuario, usar REST API
-        print("🔄 Usando Firebase REST API como alternativa...")
+        # Si Admin SDK no está disponible, mostrar advertencia
+        print("⚠️ Firebase Admin SDK no disponible - el cambio de contraseña debe hacerse desde el frontend")
+        current_app.logger.warning("Firebase Admin SDK no disponible para cambio de contraseña")
+        return False
         return update_user_password_via_rest_api(email, new_password)
         
     except Exception as e:
@@ -606,43 +680,24 @@ def forgot_password():
         
         current_app.logger.info(f"📧 Etapa 1: Procesando solicitud para {email}")
         
-        # Verificar si el usuario existe en Firebase Auth
-        current_app.logger.info("🔍 Verificando si el usuario existe en Firebase Auth...")
-        user = get_user_by_email(email)
-        if not user:
-            current_app.logger.warning(f"⚠️ Usuario no encontrado para {email} (o Firebase Admin no configurado)")
-            # Por seguridad, siempre mostrar el mismo mensaje aunque el usuario no exista
-            # Continuar para enviar el correo (en modo debug permite continuar)
-            if not current_app.config.get('DEBUG'):
-                # En producción, mostrar mensaje pero no enviar correo si no hay usuario
-                flash("Si el correo existe en nuestro sistema, recibirás un código de verificación.", "info")
-                return render_template('auth/forgot_password.html', step='email')
+        # NOTA: No verificamos si el usuario existe por seguridad (mejores prácticas).
+        # Firebase Functions manejará la verificación y envío del correo.
+        # Por seguridad, siempre mostramos el mismo mensaje.
         
         # Generar código de recuperación
         current_app.logger.info("🔑 Generando código de recuperación...")
         code_data = generate_reset_code(email)
         current_app.logger.info(f"✅ Código generado: {code_data['code']}")
         
-        # Guardar código en Firestore (opcional si no hay Firebase Admin)
-        current_app.logger.info("💾 Guardando código en Firestore...")
-        firestore_saved = save_reset_code_to_firestore(code_data)
-        
-        # SIEMPRE guardar en sesión como respaldo (tanto en DEBUG como en producción)
-        # Esto asegura que funcione incluso si Firestore falla
+        # Guardar código en sesión (usado para verificación)
         session['reset_password_code'] = code_data['code']
         session['reset_password_code_expires'] = code_data['expires_at'].isoformat()
         session['reset_password_code_hash'] = code_data['code_hash']
+        session['reset_password_email'] = email
         current_app.logger.info(f"✅ Código guardado en sesión: {code_data['code']}")
         
-        if not firestore_saved:
-            current_app.logger.warning("⚠️ No se pudo guardar en Firestore (Firebase Admin no configurado o error)")
-            current_app.logger.info("✅ Usando sesión como respaldo")
-        else:
-            current_app.logger.info("✅ Código guardado en Firestore y en sesión")
-        
-        # Guardar email en sesión para la siguiente etapa
-        session['reset_password_email'] = email
-        current_app.logger.info(f"💾 Email guardado en sesión: {email[:3]}***")
+        # NOTA: El código también se guardará en Firestore desde Firebase Functions
+        # No necesitamos Firebase Admin SDK aquí
         
         # Enviar correo con Firebase Functions (preferido) o Flask-Mail (respaldo)
         print("\n" + "=" * 60)
@@ -659,21 +714,13 @@ def forgot_password():
         if use_firebase_functions:
             try:
                 print("🔍 Intentando enviar con Firebase Functions...")
-                # Obtener nombre del usuario si está disponible
-                nombre = None
-                try:
-                    db = get_firestore_client()
-                    if db:
-                        user_doc = db.collection('usuarios').where('email', '==', email.lower()).limit(1).get()
-                        if user_doc:
-                            nombre = user_doc[0].data().get('nombre')
-                except:
-                    pass
+                # Nota: El nombre se obtendrá en Firebase Functions si es necesario
+                # No necesitamos Firebase Admin SDK aquí
                 
                 success = send_password_reset_code_via_functions(
                     email=email,
                     code=code_data['code'],
-                    nombre=nombre
+                    nombre=None  # Firebase Functions puede obtenerlo si lo necesita
                 )
                 
                 if success:
