@@ -394,21 +394,21 @@ def enviar_ticket_compra():
             current_app.logger.info(f"💳 Método de pago: {metodo_pago}")
             current_app.logger.info("=" * 80)
             
-            success = send_receipt_email_via_functions(
-                email=email_cliente,
-                nombre=nombre_cliente,
-                compra_id=compra_id,
-                fecha_compra=fecha_compra,
-                productos=productos,
-                subtotal=subtotal,
-                envio=envio,
-                impuestos=impuestos,
-                total=total,
-                metodo_pago=metodo_pago,
-                direccion_entrega=direccion_entrega
-            )
-            
-            if success:
+                success = send_receipt_email_via_functions(
+                    email=email_cliente,
+                    nombre=nombre_cliente,
+                    compra_id=compra_id,
+                    fecha_compra=fecha_compra,
+                    productos=productos,
+                    subtotal=subtotal,
+                    envio=envio,
+                    impuestos=impuestos,
+                    total=total,
+                    metodo_pago=metodo_pago,
+                    direccion_entrega=direccion_entrega
+                )
+                
+                if success:
                 current_app.logger.info("=" * 80)
                 current_app.logger.info("✅ COMPROBANTE ENVIADO EXITOSAMENTE")
                 current_app.logger.info("=" * 80)
@@ -418,25 +418,25 @@ def enviar_ticket_compra():
                 current_app.logger.info(f"📝 Mensaje: Ticket de compra enviado correctamente")
                 current_app.logger.info("=" * 80)
                 
-                return jsonify({
-                    'success': True,
+                    return jsonify({
+                        'success': True,
                     'message': 'Ticket de compra enviado correctamente',
                     'method': 'firebase_functions',
                     'method_display': 'Firebase Functions',
                     'email': email_cliente,
                     'compra_id': compra_id
-                })
-            else:
+                    })
+                else:
                 current_app.logger.error("❌ Firebase Functions falló al enviar comprobante")
                 return jsonify({
                     'success': False,
                     'error': 'No se pudo enviar el comprobante por correo. Por favor, contacta al administrador.'
                 }), 500
-        except Exception as e:
+            except Exception as e:
             current_app.logger.error(f"❌ Error con Firebase Functions: {str(e)}", exc_info=True)
             import traceback
             current_app.logger.error(f"   Traceback completo: {traceback.format_exc()}")
-            return jsonify({
+        return jsonify({
                 'success': False,
                 'error': f'Error al enviar comprobante: {str(e)}'
             }), 500
@@ -688,10 +688,14 @@ def obtener_detalles_pago(payment_intent_id):
 @comprador.route("/api/enviar-correo-cambio-estado", methods=["POST"])
 @login_required
 def api_enviar_correo_cambio_estado():
-    """API para enviar correo cuando cambia el estado de un pedido"""
+    """API para enviar correo cuando cambia el estado de un pedido usando SOLO Firebase Functions"""
+    current_app.logger.info("")
+    current_app.logger.info("=" * 80)
+    current_app.logger.info("📦 ENDPOINT: /comprador/api/enviar-correo-cambio-estado")
+    current_app.logger.info("🔧 MÉTODO DE ENVÍO: FIREBASE FUNCTIONS (único método disponible)")
+    current_app.logger.info("=" * 80)
+    
     try:
-        current_app.logger.info('📧 Recibida petición para enviar correo de cambio de estado')
-        
         data = request.get_json()
         if not data:
             current_app.logger.error('❌ No se recibieron datos JSON')
@@ -707,6 +711,9 @@ def api_enviar_correo_cambio_estado():
         fecha_actualizacion = data.get('fechaActualizacion') or data.get('fecha_actualizacion', '')
         
         current_app.logger.info(f'📧 Datos recibidos: email={email}, compra_id={compra_id}, nuevo_estado={nuevo_estado}')
+        current_app.logger.info(f'   Estado anterior: {estado_anterior}')
+        current_app.logger.info(f'   Productos: {len(productos)}')
+        current_app.logger.info(f'   Vendedor: {vendedor_nombre}')
         
         if not email or not compra_id or not nuevo_estado:
             return jsonify({
@@ -714,97 +721,59 @@ def api_enviar_correo_cambio_estado():
                 'error': 'Email, compraId y nuevoEstado son requeridos'
             }), 400
         
-        # Obtener la instancia de Mail
-        mail = current_app.extensions.get('mail')
-        if not mail:
+        # Usar SOLO Firebase Functions (sin respaldo de Flask-Mail)
+        try:
+            from utils.firebase_functions import send_order_status_change_email_via_functions
+        except ImportError:
+            current_app.logger.error("❌ No se puede importar send_order_status_change_email_via_functions")
             return jsonify({
                 'success': False,
-                'error': 'Servicio de correo no disponible'
-            }), 503
+                'error': 'Servicio de correo no disponible. Por favor, contacta al administrador.'
+            }), 500
         
-        # Mapeo de estados
-        estado_labels = {
-            'preparando': 'Preparando',
-            'enviado': 'Enviado',
-            'recibido': 'Recibido',
-            'cancelado': 'Cancelado'
-        }
-        
-        estado_label = estado_labels.get(nuevo_estado.lower(), nuevo_estado)
-        estado_anterior_label = estado_labels.get(estado_anterior.lower(), estado_anterior) if estado_anterior else 'N/A'
-        
-        # Construir lista de productos
-        productos_html = ''
-        if productos and isinstance(productos, list) and len(productos) > 0:
-            productos_html = ''.join([
-                f'<li>{p.get("nombre", "Producto")} - {p.get("cantidad", 0)} {p.get("unidad", "kg")}</li>'
-                for p in productos
-            ])
-        else:
-            productos_html = '<li>No hay productos especificados</li>'
-        
-        # Crear el HTML del correo (simplificado)
-        html_body = f'''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: linear-gradient(135deg, #2e8b57 0%, #228B22 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
-                .header h1 {{ margin: 0; font-size: 28px; }}
-                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }}
-                .section {{ background: white; padding: 30px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }}
-                .section h2 {{ color: #2e8b57; margin-top: 0; font-size: 22px; }}
-                .mensaje-principal {{ color: #333; font-size: 18px; margin: 20px 0; line-height: 1.8; }}
-                .estado-destacado {{ color: #2e8b57; font-size: 24px; font-weight: bold; margin: 20px 0; }}
-                .footer {{ text-align: center; margin-top: 30px; color: #666; font-size: 12px; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>🍃 AgroMarket</h1>
-                    <p style="margin: 10px 0 0 0; font-size: 18px;">Actualización de Estado de Pedido</p>
-                </div>
+        try:
+            success = send_order_status_change_email_via_functions(
+                email=email,
+                nombre=nombre,
+                compra_id=compra_id,
+                nuevo_estado=nuevo_estado,
+                estado_anterior=estado_anterior,
+                productos=productos,
+                vendedor_nombre=vendedor_nombre,
+                fecha_actualizacion=fecha_actualizacion
+            )
+            
+            if success:
+                current_app.logger.info("=" * 80)
+                current_app.logger.info("✅ CORREO DE CAMBIO DE ESTADO ENVIADO EXITOSAMENTE")
+                current_app.logger.info(f"📧 Email: {email}")
+                current_app.logger.info(f"📦 Compra ID: {compra_id}")
+                current_app.logger.info(f"🔄 Estado: {estado_anterior} → {nuevo_estado}")
+                current_app.logger.info(f"🔧 MÉTODO: FIREBASE FUNCTIONS ✅")
+                current_app.logger.info("=" * 80)
                 
-                <div class="content">
-                    <div class="section">
-                        <h2>Hola {nombre},</h2>
-                        <p class="mensaje-principal">
-                            Actualización de estado del pedido <strong>#{compra_id[:9].upper()}</strong> a <span class="estado-destacado">{estado_label}</span>
-                        </p>
-                        <p style="color: #666; font-size: 14px; margin-top: 30px;">
-                            Puedes ver el estado completo de tu pedido en cualquier momento desde tu cuenta en AgroMarket.
-                        </p>
-                    </div>
-                </div>
-                
-                <div class="footer">
-                    <p>© {data.get('year', '2024')} AgroMarket. Todos los derechos reservados.</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        '''
-        
-        # Crear y enviar el correo
-        sender = current_app.config.get('MAIL_DEFAULT_SENDER', 'AgroMarket <agromarket559@gmail.com>')
-        msg = Message(
-            subject=f'📦 Actualización de Pedido #{compra_id[:9].upper()} - {estado_label}',
-            recipients=[email],
-            sender=sender,
-            html=html_body
-        )
-        
-        mail.send(msg)
-        current_app.logger.info(f"✅ Correo de cambio de estado enviado a {email}")
-        
-        return jsonify({
-            'success': True,
-            'message': 'Correo de cambio de estado enviado correctamente'
-        })
+                return jsonify({
+                    'success': True,
+                    'message': 'Correo de cambio de estado enviado correctamente',
+                    'method': 'firebase_functions',
+                    'method_display': 'Firebase Functions',
+                    'email': email,
+                    'compra_id': compra_id
+                })
+            else:
+                current_app.logger.error("❌ Firebase Functions falló al enviar correo de cambio de estado")
+                return jsonify({
+                    'success': False,
+                    'error': 'No se pudo enviar el correo de cambio de estado. Por favor, contacta al administrador.'
+                }), 500
+        except Exception as e:
+            current_app.logger.error(f"❌ Error con Firebase Functions: {str(e)}", exc_info=True)
+            import traceback
+            current_app.logger.error(f"   Traceback completo: {traceback.format_exc()}")
+            return jsonify({
+                'success': False,
+                'error': f'Error al enviar correo: {str(e)}'
+            }), 500
         
     except Exception as e:
         current_app.logger.error(f'❌ Error enviando correo de cambio de estado: {str(e)}', exc_info=True)

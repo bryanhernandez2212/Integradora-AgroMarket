@@ -402,6 +402,27 @@ def send_order_status_change_email_via_functions(email, nombre, compra_id, nuevo
     Returns:
         bool: True si se envió correctamente
     """
+    try:
+        current_app.logger.info("=" * 80)
+        current_app.logger.info("📦 INICIANDO ENVÍO DE CORREO DE CAMBIO DE ESTADO")
+        current_app.logger.info("=" * 80)
+        current_app.logger.info(f"📧 Email destinatario: {email}")
+        current_app.logger.info(f"👤 Nombre cliente: {nombre}")
+        current_app.logger.info(f"📦 Compra ID: {compra_id}")
+        current_app.logger.info(f"🔄 Estado anterior: {estado_anterior or 'N/A'}")
+        current_app.logger.info(f"🔄 Nuevo estado: {nuevo_estado}")
+        current_app.logger.info(f"📊 Productos: {len(productos) if productos else 0}")
+        current_app.logger.info(f"👨‍💼 Vendedor: {vendedor_nombre or 'N/A'}")
+        current_app.logger.info(f"🔍 Llamando a Firebase Function: sendOrderStatusChangeEmail")
+    except RuntimeError:
+        print("=" * 80)
+        print("📦 INICIANDO ENVÍO DE CORREO DE CAMBIO DE ESTADO")
+        print("=" * 80)
+        print(f"📧 Email: {email}")
+        print(f"📦 Compra ID: {compra_id}")
+        print(f"🔄 Estado: {estado_anterior or 'N/A'} → {nuevo_estado}")
+        print(f"🔍 Llamando a Firebase Function: sendOrderStatusChangeEmail")
+    
     data = {
         'email': email,
         'nombre': nombre,
@@ -415,17 +436,46 @@ def send_order_status_change_email_via_functions(email, nombre, compra_id, nuevo
     
     result = call_firebase_function('sendOrderStatusChangeEmail', data)
     
+    try:
+        current_app.logger.info(f"📥 Respuesta recibida de Firebase Functions")
+        current_app.logger.info(f"   Resultado: {result}")
+    except RuntimeError:
+        print(f"📥 Respuesta recibida de Firebase Functions: {result}")
+    
     if result and result.get('success'):
         try:
-            current_app.logger.info(f"✅ Notificación de cambio de estado enviada a {email}")
+            current_app.logger.info("=" * 80)
+            current_app.logger.info("✅ CORREO DE CAMBIO DE ESTADO ENVIADO EXITOSAMENTE VÍA FIREBASE FUNCTIONS")
+            current_app.logger.info(f"📧 Email: {email}")
+            current_app.logger.info(f"📦 Compra ID: {compra_id}")
+            current_app.logger.info(f"🔄 Estado: {estado_anterior or 'N/A'} → {nuevo_estado}")
+            if result.get('messageId'):
+                current_app.logger.info(f"📨 Message ID: {result.get('messageId')}")
+            current_app.logger.info("=" * 80)
         except RuntimeError:
-            print(f"✅ Notificación de cambio de estado enviada a {email}")
+            print("=" * 80)
+            print("✅ CORREO DE CAMBIO DE ESTADO ENVIADO EXITOSAMENTE VÍA FIREBASE FUNCTIONS")
+            print(f"📧 Email: {email}")
+            print(f"📦 Compra ID: {compra_id}")
+            print("=" * 80)
         return True
     else:
+        error_msg = result.get('error', 'Error desconocido') if result else 'No se recibió respuesta de Firebase Functions'
         try:
-            current_app.logger.error(f"❌ Error enviando notificación de cambio de estado a {email}")
+            current_app.logger.error("=" * 80)
+            current_app.logger.error("❌ ERROR ENVIANDO CORREO DE CAMBIO DE ESTADO")
+            current_app.logger.error(f"📧 Email: {email}")
+            current_app.logger.error(f"📦 Compra ID: {compra_id}")
+            current_app.logger.error(f"❌ Error: {error_msg}")
+            current_app.logger.error(f"   Resultado completo: {result}")
+            current_app.logger.error("=" * 80)
         except RuntimeError:
-            print(f"❌ Error enviando notificación de cambio de estado a {email}")
+            print("=" * 80)
+            print("❌ ERROR ENVIANDO CORREO DE CAMBIO DE ESTADO")
+            print(f"📧 Email: {email}")
+            print(f"❌ Error: {error_msg}")
+            print(f"   Resultado completo: {result}")
+            print("=" * 80)
         return False
 
 def send_seller_approval_email_via_functions(email, nombre, nombre_tienda=None, ubicacion=None):

@@ -964,8 +964,24 @@ exports.sendOrderStatusChangeEmail = onCall(
     secrets: [smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, smtpFrom],
     cors: true, // Permitir CORS
     invoker: 'public', // Permitir llamadas públicas (sin autenticación)
+    timeoutSeconds: 60, // Timeout de 60 segundos para permitir resolución DNS y conexión SMTP
+    maxInstances: 10, // Máximo de instancias concurrentes
   },
   async (request) => {
+    console.log('='.repeat(80));
+    console.log('📦 FIREBASE FUNCTION: sendOrderStatusChangeEmail - INICIANDO');
+    console.log('='.repeat(80));
+    console.log('📥 Datos recibidos:', JSON.stringify({
+      email: request.data?.email,
+      compraId: request.data?.compraId,
+      nombre: request.data?.nombre,
+      nuevoEstado: request.data?.nuevoEstado,
+      estadoAnterior: request.data?.estadoAnterior,
+      productosCount: request.data?.productos?.length || 0,
+      vendedorNombre: request.data?.vendedorNombre
+    }, null, 2));
+    console.log('⏰ Timestamp:', new Date().toISOString());
+    
     try {
       const {
         email,
@@ -979,14 +995,53 @@ exports.sendOrderStatusChangeEmail = onCall(
       } = request.data;
       
       if (!email || !compraId || !nuevoEstado) {
+        console.error('❌ Validación falló: Email, compraId y nuevoEstado son requeridos');
         throw new HttpsError(
           'invalid-argument',
           'Email, compraId y nuevoEstado son requeridos'
         );
       }
       
+      console.log('✅ Validación exitosa');
+      console.log(`📧 Email: ${email}`);
+      console.log(`📦 Compra ID: ${compraId}`);
+      console.log(`👤 Nombre: ${nombre || 'N/A'}`);
+      console.log(`🔄 Estado anterior: ${estadoAnterior || 'N/A'}`);
+      console.log(`🔄 Nuevo estado: ${nuevoEstado}`);
+      console.log(`📊 Productos: ${productos?.length || 0}`);
+      console.log(`👨‍💼 Vendedor: ${vendedorNombre || 'N/A'}`);
+      
       const config = getSMTPConfig();
-      const transporter = await createTransporter();
+      console.log('📧 Configuración SMTP obtenida');
+      
+      // Crear transporter con manejo mejorado de errores DNS
+      let transporter;
+      try {
+        transporter = await createTransporter();
+        console.log('✅ Transporter creado exitosamente');
+      } catch (transporterError) {
+        console.error('❌ Error creando transporter:', transporterError);
+        // Si el error es de DNS, intentar con IP directa
+        if (transporterError.message && transporterError.message.includes('EBADNAME')) {
+          console.warn('⚠️ Error DNS detectado, intentando con IP directa...');
+          // Forzar uso de IP directa
+          const gmailIP = '74.125.200.108';
+          const directConfig = {
+            host: gmailIP,
+            port: config.port,
+            secure: config.port === 465,
+            auth: config.auth,
+            tls: {
+              rejectUnauthorized: false,
+              servername: 'smtp.gmail.com'
+            }
+          };
+          transporter = nodemailer.createTransport(directConfig);
+          console.log('✅ Transporter creado con IP directa');
+        } else {
+          throw transporterError;
+        }
+      }
       
       // Mapeo de estados a etiquetas en español
       const estadoLabels = {
@@ -1053,16 +1108,48 @@ Gracias por tu compra en AgroMarket 🍃`;
         text: text,
       };
       
+      console.log('📤 Enviando correo con Nodemailer...');
+      console.log('   From:', mailOptions.from);
+      console.log('   To:', mailOptions.to);
+      console.log('   Subject:', mailOptions.subject);
+      
       const info = await transporter.sendMail(mailOptions);
       
-      console.log('✅ Notificación de cambio de estado enviada a:', email);
+      console.log('='.repeat(80));
+      console.log('✅ CORREO DE CAMBIO DE ESTADO ENVIADO EXITOSAMENTE');
+      console.log('='.repeat(80));
+      console.log('📧 Email destinatario:', email);
+      console.log('📦 Compra ID:', compraId);
+      console.log('🔄 Estado:', estadoAnterior || 'N/A', '→', nuevoEstado);
+      console.log('📨 Message ID:', info.messageId);
+      console.log('📧 Response:', info.response);
+      console.log('⏰ Timestamp:', new Date().toISOString());
+      console.log('='.repeat(80));
       
       return {
         success: true,
         messageId: info.messageId,
+        response: info.response,
       };
     } catch (error) {
-      console.error('Error enviando notificación de cambio de estado:', error);
+      console.error('='.repeat(80));
+      console.error('❌ ERROR ENVIANDO CORREO DE CAMBIO DE ESTADO');
+      console.error('='.repeat(80));
+      console.error('📧 Email:', request.data?.email);
+      console.error('📦 Compra ID:', request.data?.compraId);
+      console.error('❌ Tipo de error:', error.constructor.name);
+      console.error('❌ Mensaje:', error.message);
+      console.error('❌ Stack:', error.stack);
+      
+      // Si es un error de DNS, proporcionar mensaje más específico
+      if (error.message && (error.message.includes('EBADNAME') || error.message.includes('queryA'))) {
+        console.error('⚠️ Error de DNS detectado, esto puede indicar un problema de red en Firebase Functions');
+        throw new HttpsError(
+          'internal',
+          'Error de conexión DNS al servidor de correo. Por favor, intenta nuevamente más tarde.'
+        );
+      }
+      
       throw new HttpsError(
         'internal',
         'Error al enviar correo: ' + error.message
