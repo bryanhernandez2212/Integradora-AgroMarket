@@ -2293,7 +2293,7 @@ a:hover {
     font-weight: 600;
     min-width: 55px;
     text-align: center;
-    color: white;
+    color: var(--green);
     white-space: nowrap;
 }
 
@@ -2689,12 +2689,17 @@ a:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 400px;
+    min-height: calc(100vh - 300px);
+    width: 100%;
+    margin: 0 auto;
+    padding: 2rem;
 }
 
 .carrito-vacio-content {
     text-align: center;
-    max-width: 400px;
+    max-width: 500px;
+    width: 100%;
+    margin: 0 auto;
 }
 
 .carrito-vacio-content h1 {
@@ -2724,6 +2729,12 @@ a:hover {
 .btn-comenzar-compras:hover {
     background: var(--green-900);
     transform: translateY(-2px);
+}
+
+/* Ajustar layout cuando solo hay mensaje de carrito vacío */
+.carrito-main.carrito-vacio-active {
+    grid-template-columns: 1fr;
+    justify-items: center;
 }
 
 /* ===== RESPONSIVE PARA CARRITO ===== */

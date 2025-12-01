@@ -31,7 +31,9 @@ def get_firebase_functions_url(function_name):
         return url
     
     # Usar funciones de producción
+    # Para Firebase Functions v2 onCall, la URL debe incluir la región y el formato correcto
     region = 'us-central1'  # Región por defecto
+    # Formato para onCall v2: https://{region}-{project_id}.cloudfunctions.net/{function_name}
     url = f"https://{region}-{project_id}.cloudfunctions.net/{function_name}"
     
     # Log para indicar si es desarrollo o producción
@@ -64,9 +66,9 @@ def call_firebase_function(function_name, data, id_token=None):
     """
     url = get_firebase_functions_url(function_name)
     
-    # Firebase Functions v2 onCall espera el formato: {"data": {...}}
-    # Pero cuando se llama via HTTP directamente, el formato es diferente
-    # Intentamos ambos formatos por compatibilidad
+    # Firebase Functions v2 onCall cuando se llama vía HTTP directo
+    # espera el formato: {"data": {...}}
+    # La URL debe incluir el formato correcto para onCall
     
     headers = {
         'Content-Type': 'application/json',
@@ -75,10 +77,45 @@ def call_firebase_function(function_name, data, id_token=None):
     if id_token:
         headers['Authorization'] = f'Bearer {id_token}'
     
-    # Formato para onCall: envolver en "data"
+    # Formato para onCall v2: envolver en "data"
+    # Firebase Functions onCall v2 procesa automáticamente este formato
+    # IMPORTANTE: Cuando se llama vía HTTP directo, Firebase Functions espera
+    # que el body sea exactamente {"data": {...}}
     payload = {
         'data': data
     }
+    
+    # Verificar que el email esté presente en los datos antes de enviar
+    if 'email' not in data or not data.get('email'):
+        try:
+            current_app.logger.error("=" * 80)
+            current_app.logger.error("❌ ERROR CRÍTICO: Email no encontrado en data antes de enviar")
+            current_app.logger.error(f"   Keys en data: {list(data.keys())}")
+            current_app.logger.error(f"   Data completo: {json.dumps(data, indent=2, default=str)}")
+            current_app.logger.error("=" * 80)
+        except RuntimeError:
+            print("=" * 80)
+            print("❌ ERROR CRÍTICO: Email no encontrado en data antes de enviar")
+            print(f"   Keys en data: {list(data.keys())}")
+            print(f"   Data completo: {json.dumps(data, indent=2, default=str)}")
+            print("=" * 80)
+        return None
+    
+    # Verificar que el email en el payload también esté presente
+    if 'data' not in payload or 'email' not in payload['data'] or not payload['data'].get('email'):
+        try:
+            current_app.logger.error("=" * 80)
+            current_app.logger.error("❌ ERROR CRÍTICO: Email no encontrado en payload antes de enviar")
+            current_app.logger.error(f"   Payload keys: {list(payload.keys())}")
+            current_app.logger.error(f"   Payload data keys: {list(payload.get('data', {}).keys())}")
+            current_app.logger.error("=" * 80)
+        except RuntimeError:
+            print("=" * 80)
+            print("❌ ERROR CRÍTICO: Email no encontrado en payload antes de enviar")
+            print(f"   Payload keys: {list(payload.keys())}")
+            print(f"   Payload data keys: {list(payload.get('data', {}).keys())}")
+            print("=" * 80)
+        return None
     
     try:
         # Logging detallado para debugging en producción
@@ -102,6 +139,42 @@ def call_firebase_function(function_name, data, id_token=None):
             print(f"⏱️  Iniciando llamada con timeout de {timeout_seconds} segundos...")
         
         start_time = datetime.now()
+        
+        # Logging del payload completo antes de enviar
+        try:
+            current_app.logger.info("=" * 80)
+            current_app.logger.info("📤 PAYLOAD COMPLETO A ENVIAR A FIREBASE FUNCTIONS")
+            current_app.logger.info("=" * 80)
+            current_app.logger.info(f"   {json.dumps(payload, indent=2, default=str)}")
+            current_app.logger.info("=" * 80)
+            if 'data' in payload and 'email' in payload['data']:
+                current_app.logger.info(f"   ✅ Email encontrado en payload.data: {payload['data'].get('email')}")
+            elif 'email' in data:
+                current_app.logger.info(f"   ✅ Email encontrado en data: {data.get('email')}")
+            else:
+                current_app.logger.error(f"   ❌ Email NO encontrado!")
+                current_app.logger.error(f"   Keys en payload: {list(payload.keys())}")
+                if 'data' in payload:
+                    current_app.logger.error(f"   Keys en payload.data: {list(payload['data'].keys())}")
+                current_app.logger.error(f"   Keys en data: {list(data.keys())}")
+            current_app.logger.info("=" * 80)
+        except RuntimeError:
+            print("=" * 80)
+            print("📤 PAYLOAD COMPLETO A ENVIAR A FIREBASE FUNCTIONS")
+            print("=" * 80)
+            print(f"   {json.dumps(payload, indent=2, default=str)}")
+            print("=" * 80)
+            if 'data' in payload and 'email' in payload['data']:
+                print(f"   ✅ Email encontrado en payload.data: {payload['data'].get('email')}")
+            elif 'email' in data:
+                print(f"   ✅ Email encontrado en data: {data.get('email')}")
+            else:
+                print(f"   ❌ Email NO encontrado!")
+                print(f"   Keys en payload: {list(payload.keys())}")
+                if 'data' in payload:
+                    print(f"   Keys en payload.data: {list(payload['data'].keys())}")
+                print(f"   Keys en data: {list(data.keys())}")
+            print("=" * 80)
         
         response = requests.post(
             url,
@@ -135,19 +208,61 @@ def call_firebase_function(function_name, data, id_token=None):
             print(f"   Body: {response.text[:200]}")
         
         if response.status_code == 200:
-            result = response.json()
+            try:
+                result = response.json()
+            except json.JSONDecodeError:
+                # Si no es JSON, intentar parsear como texto
+                result = {'error': response.text[:500]}
+                try:
+                    current_app.logger.error(f"❌ Respuesta no es JSON válido: {response.text[:500]}")
+                except RuntimeError:
+                    print(f"❌ Respuesta no es JSON válido: {response.text[:500]}")
+                return None
+            
             # onCall devuelve {"result": {...}} cuando es exitoso
             if 'result' in result:
                 return result['result']
-            # Si no tiene "result", devolver directamente
+            
+            # Verificar si hay un error en la respuesta (incluso con status 200)
+            if isinstance(result, dict):
+                if result.get('success') == False:
+                    # La función devolvió un error pero con status 200
+                    error_msg = result.get('message') or result.get('error') or 'Error desconocido'
+                    try:
+                        current_app.logger.error("=" * 80)
+                        current_app.logger.error(f"❌ Firebase Function devolvió error con status 200")
+                        current_app.logger.error(f"   Error: {error_msg}")
+                        current_app.logger.error(f"   Respuesta completa: {result}")
+                        current_app.logger.error("=" * 80)
+                    except RuntimeError:
+                        print("=" * 80)
+                        print(f"❌ Firebase Function devolvió error con status 200")
+                        print(f"   Error: {error_msg}")
+                        print(f"   Respuesta completa: {result}")
+                        print("=" * 80)
+                    return result  # Devolver el resultado para que el código que llama pueda manejar el error
+                elif result.get('success') == True:
+                    # Éxito explícito
+                    return result
+            
+            # Si no tiene "result" ni "success", devolver directamente
             return result
         else:
-            # Para errores 500 (como DNS), fallar inmediatamente sin esperar más
-            error_msg = f"Error llamando a {function_name}: {response.status_code} - {response.text[:500]}"
+            # Para errores HTTP, intentar parsear el error
             try:
-                current_app.logger.error(error_msg)
-            except RuntimeError:
-                print(error_msg)
+                error_json = response.json()
+                error_msg = error_json.get('error', {}).get('message', response.text[:500])
+                try:
+                    current_app.logger.error(f"❌ Error HTTP {response.status_code}: {error_msg}")
+                    current_app.logger.error(f"   Respuesta completa: {error_json}")
+                except RuntimeError:
+                    print(f"❌ Error HTTP {response.status_code}: {error_msg}")
+            except:
+                error_msg = f"Error llamando a {function_name}: {response.status_code} - {response.text[:500]}"
+                try:
+                    current_app.logger.error(error_msg)
+                except RuntimeError:
+                    print(error_msg)
             return None
     except requests.exceptions.Timeout:
         error_msg = f"⏱️  TIMEOUT: La función {function_name} tardó más de 60 segundos en responder"
@@ -304,17 +419,31 @@ def send_receipt_email_via_functions(email, nombre, compra_id, fecha_compra, pro
     Returns:
         bool: True si se envió correctamente
     """
+    # Validar que el email esté presente y no esté vacío
+    if not email or not email.strip():
+        try:
+            current_app.logger.error("=" * 80)
+            current_app.logger.error("❌ ERROR: Email no proporcionado o vacío")
+            current_app.logger.error(f"   Email recibido: {repr(email)}")
+            current_app.logger.error("=" * 80)
+        except RuntimeError:
+            print("=" * 80)
+            print("❌ ERROR: Email no proporcionado o vacío")
+            print(f"   Email recibido: {repr(email)}")
+            print("=" * 80)
+        return False
+    
     data = {
-        'email': email,
-        'nombre': nombre,
+        'email': email.strip(),  # Asegurar que no haya espacios
+        'nombre': nombre or 'Cliente',
         'compraId': compra_id,
         'fechaCompra': fecha_compra,
-        'productos': productos,
+        'productos': productos or [],
         'subtotal': subtotal,
         'envio': envio,
         'impuestos': impuestos,
         'total': total,
-        'metodoPago': metodo_pago,
+        'metodoPago': metodo_pago or 'tarjeta',
         'direccionEntrega': direccion_entrega or {}
     }
     
@@ -325,10 +454,12 @@ def send_receipt_email_via_functions(email, nombre, compra_id, fecha_compra, pro
         current_app.logger.info(f"📧 Email destinatario: {email}")
         current_app.logger.info(f"📦 Compra ID: {compra_id}")
         current_app.logger.info(f"👤 Nombre cliente: {nombre}")
-        current_app.logger.info(f"📊 Productos: {len(productos)}")
+        current_app.logger.info(f"📊 Productos: {len(productos) if productos else 0}")
         current_app.logger.info(f"💰 Total: ${total:.2f}, Subtotal: ${subtotal:.2f}, Envío: ${envio:.2f}, Impuestos: ${impuestos:.2f}")
         current_app.logger.info(f"💳 Método de pago: {metodo_pago}")
         current_app.logger.info(f"🔍 Llamando a Firebase Function: sendReceiptEmail")
+        current_app.logger.info(f"📤 Payload keys: {list(data.keys())}")
+        current_app.logger.info(f"📤 Email en payload: {data.get('email', 'NO ENCONTRADO')}")
     except RuntimeError:
         print("=" * 80)
         print("📧 INICIANDO ENVÍO DE COMPROBANTE DE COMPRA")
@@ -336,50 +467,108 @@ def send_receipt_email_via_functions(email, nombre, compra_id, fecha_compra, pro
         print(f"📧 Email destinatario: {email}")
         print(f"📦 Compra ID: {compra_id}")
         print(f"👤 Nombre cliente: {nombre}")
-        print(f"📊 Productos: {len(productos)}")
+        print(f"📊 Productos: {len(productos) if productos else 0}")
         print(f"💰 Total: ${total:.2f}")
         print(f"🔍 Llamando a Firebase Function: sendReceiptEmail")
+        print(f"📤 Payload keys: {list(data.keys())}")
+        print(f"📤 Email en payload: {data.get('email', 'NO ENCONTRADO')}")
     
     result = call_firebase_function('sendReceiptEmail', data)
     
     try:
         current_app.logger.info(f"📥 Respuesta recibida de Firebase Functions")
-        current_app.logger.info(f"   Resultado: {result}")
+        current_app.logger.info(f"   Tipo de resultado: {type(result)}")
+        current_app.logger.info(f"   Resultado completo: {result}")
+        if isinstance(result, dict):
+            current_app.logger.info(f"   Keys en resultado: {list(result.keys())}")
+            current_app.logger.info(f"   success: {result.get('success')}")
+            current_app.logger.info(f"   message: {result.get('message')}")
+            current_app.logger.info(f"   error: {result.get('error')}")
     except RuntimeError:
-        print(f"📥 Respuesta recibida de Firebase Functions: {result}")
+        print(f"📥 Respuesta recibida de Firebase Functions")
+        print(f"   Tipo de resultado: {type(result)}")
+        print(f"   Resultado completo: {result}")
+        if isinstance(result, dict):
+            print(f"   Keys en resultado: {list(result.keys())}")
     
-    if result and result.get('success'):
-        try:
-            current_app.logger.info("=" * 80)
-            current_app.logger.info("✅ COMPROBANTE ENVIADO EXITOSAMENTE VÍA FIREBASE FUNCTIONS")
-            current_app.logger.info(f"📧 Email: {email}")
-            current_app.logger.info(f"📦 Compra ID: {compra_id}")
-            if result.get('messageId'):
-                current_app.logger.info(f"📨 Message ID: {result.get('messageId')}")
-            current_app.logger.info("=" * 80)
-        except RuntimeError:
-            print("=" * 80)
-            print("✅ COMPROBANTE ENVIADO EXITOSAMENTE VÍA FIREBASE FUNCTIONS")
-            print(f"📧 Email: {email}")
-            print(f"📦 Compra ID: {compra_id}")
-            print("=" * 80)
-        return True
-    else:
-        error_msg = result.get('error', 'Error desconocido') if result else 'No se recibió respuesta de Firebase Functions'
+    # Verificar si el resultado indica éxito
+    # Firebase Functions puede devolver el resultado de diferentes formas
+    if result is None:
         try:
             current_app.logger.error("=" * 80)
-            current_app.logger.error("❌ ERROR ENVIANDO COMPROBANTE")
+            current_app.logger.error("❌ ERROR: Firebase Functions devolvió None")
+            current_app.logger.error("   Esto indica que la llamada falló o no se recibió respuesta")
+            current_app.logger.error("=" * 80)
+        except RuntimeError:
+            print("=" * 80)
+            print("❌ ERROR: Firebase Functions devolvió None")
+            print("=" * 80)
+        return False
+    
+    if isinstance(result, dict):
+        if result.get('success') == True:
+            try:
+                current_app.logger.info("=" * 80)
+                current_app.logger.info("✅ COMPROBANTE ENVIADO EXITOSAMENTE VÍA FIREBASE FUNCTIONS")
+                current_app.logger.info(f"📧 Email: {email}")
+                current_app.logger.info(f"📦 Compra ID: {compra_id}")
+                if result.get('messageId'):
+                    current_app.logger.info(f"📨 Message ID: {result.get('messageId')}")
+                current_app.logger.info("=" * 80)
+            except RuntimeError:
+                print("=" * 80)
+                print("✅ COMPROBANTE ENVIADO EXITOSAMENTE VÍA FIREBASE FUNCTIONS")
+                print(f"📧 Email: {email}")
+                print(f"📦 Compra ID: {compra_id}")
+                print("=" * 80)
+            return True
+        else:
+            # Si success es False o no está presente, es un error
+            error_msg = 'Error desconocido'
+            if isinstance(result, dict):
+                error_msg = result.get('error') or result.get('message') or 'Error al enviar comprobante'
+            else:
+                error_msg = str(result) if result else 'No se recibió respuesta de Firebase Functions'
+            
+            try:
+                current_app.logger.error("=" * 80)
+                current_app.logger.error("❌ ERROR ENVIANDO COMPROBANTE")
+                current_app.logger.error(f"📧 Email: {email}")
+                current_app.logger.error(f"📦 Compra ID: {compra_id}")
+                current_app.logger.error(f"❌ Error: {error_msg}")
+                current_app.logger.error(f"   Resultado completo: {result}")
+                current_app.logger.error(f"   Tipo de resultado: {type(result)}")
+                if isinstance(result, dict):
+                    current_app.logger.error(f"   Keys en resultado: {list(result.keys())}")
+                current_app.logger.error("=" * 80)
+            except RuntimeError:
+                print("=" * 80)
+                print("❌ ERROR ENVIANDO COMPROBANTE")
+                print(f"📧 Email: {email}")
+                print(f"📦 Compra ID: {compra_id}")
+                print(f"❌ Error: {error_msg}")
+                print(f"   Resultado completo: {result}")
+                print(f"   Tipo de resultado: {type(result)}")
+                if isinstance(result, dict):
+                    print(f"   Keys en resultado: {list(result.keys())}")
+                print("=" * 80)
+            return False
+    else:
+        # Si result no es un diccionario, es un error
+        try:
+            current_app.logger.error("=" * 80)
+            current_app.logger.error("❌ ERROR ENVIANDO COMPROBANTE - Resultado no es diccionario")
             current_app.logger.error(f"📧 Email: {email}")
             current_app.logger.error(f"📦 Compra ID: {compra_id}")
-            current_app.logger.error(f"❌ Error: {error_msg}")
-            current_app.logger.error(f"   Resultado completo: {result}")
+            current_app.logger.error(f"   Tipo de resultado: {type(result)}")
+            current_app.logger.error(f"   Resultado: {result}")
             current_app.logger.error("=" * 80)
         except RuntimeError:
             print("=" * 80)
-            print("❌ ERROR ENVIANDO COMPROBANTE")
+            print("❌ ERROR ENVIANDO COMPROBANTE - Resultado no es diccionario")
             print(f"📧 Email: {email}")
-            print(f"❌ Error: {error_msg}")
-            print(f"   Resultado completo: {result}")
+            print(f"   Tipo de resultado: {type(result)}")
+            print(f"   Resultado: {result}")
             print("=" * 80)
         return False
 

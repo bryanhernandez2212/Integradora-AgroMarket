@@ -384,11 +384,16 @@
             const serverSection = main.querySelector('.carrito-productos');
             const serverAside = main.querySelector('.carrito-checkout');
 
-            // Si no hay items, mostrar vacío y salir
+            // Si no hay items, mostrar vacío y ocultar contenido del servidor
             if (!carritoItems || carritoItems.length === 0) {
-                if (serverSection) serverSection.style.display = '';
-                if (serverAside) serverAside.style.display = '';
-                if (vacio) vacio.style.display = '';
+                if (serverSection) serverSection.style.display = 'none';
+                if (serverAside) serverAside.style.display = 'none';
+                if (vacio) vacio.style.display = 'block';
+                // Ocultar también el contenedor dinámico si existe
+                const contenedorDin = document.getElementById('carrito-dinamico');
+                if (contenedorDin) contenedorDin.style.display = 'none';
+                // Agregar clase para ajustar el layout
+                if (main) main.classList.add('carrito-vacio-active');
                 return;
             }
 
@@ -396,6 +401,8 @@
             if (vacio) vacio.style.display = 'none';
             if (serverSection) serverSection.style.display = 'none';
             if (serverAside) serverAside.style.display = 'none';
+            // Remover clase de carrito vacío para restaurar layout normal
+            if (main) main.classList.remove('carrito-vacio-active');
 
             let contenedor = document.getElementById('carrito-dinamico');
             if (!contenedor) {
@@ -405,6 +412,9 @@
                 contenedor.style.gridTemplateColumns = '1fr 320px';
                 contenedor.style.gap = '1.5rem';
                 main.appendChild(contenedor);
+            } else {
+                // Asegurar que el contenedor esté visible cuando hay items
+                contenedor.style.display = 'grid';
             }
 
             const subtotal = carritoItems.reduce((acc, it) => acc + (Number(it.precio) * Number(it.cantidad)), 0);
