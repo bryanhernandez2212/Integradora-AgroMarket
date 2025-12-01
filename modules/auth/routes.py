@@ -770,13 +770,58 @@ def forgot_password():
             
             current_app.logger.info(f"Enviando correo a {email} desde {mail_username} vía {mail_server}:{mail_port}")
             
-            # Crear mensaje de correo
-            sender = current_app.config.get('MAIL_DEFAULT_SENDER', 'AgroMarket <agromarket559@gmail.com>')
-            msg = Message(
-                subject='🔐 Código de Verificación - AgroMarket',
-                recipients=[email],
-                sender=sender,
-                html=f'''
+            # Intentar múltiples configuraciones SMTP si falla la primera
+            smtp_configs = [
+                {
+                    'server': mail_server,
+                    'port': mail_port,
+                    'use_tls': mail_use_tls,
+                    'use_ssl': False
+                },
+                # Alternativa 1: Puerto 465 con SSL (si el puerto 587 está bloqueado)
+                {
+                    'server': mail_server,
+                    'port': 465,
+                    'use_tls': False,
+                    'use_ssl': True
+                },
+                # Alternativa 2: Puerto 25 (si está disponible, aunque menos seguro)
+                {
+                    'server': mail_server,
+                    'port': 25,
+                    'use_tls': False,
+                    'use_ssl': False
+                }
+            ]
+            
+            email_sent = False
+            last_error = None
+            
+            for config_index, smtp_config in enumerate(smtp_configs):
+                try:
+                    # Si ya se envió exitosamente, salir
+                    if email_sent:
+                        break
+                    
+                    # Reconfigurar Flask-Mail con esta configuración
+                    current_app.config['MAIL_PORT'] = smtp_config['port']
+                    current_app.config['MAIL_USE_TLS'] = smtp_config['use_tls']
+                    current_app.config['MAIL_USE_SSL'] = smtp_config['use_ssl']
+                    
+                    # Reinicializar mail con nueva configuración
+                    from flask_mail import Mail
+                    mail = Mail(current_app)
+                    
+                    if config_index > 0:
+                        print(f"🔄 Intentando configuración alternativa {config_index + 1}: puerto {smtp_config['port']} ({'SSL' if smtp_config['use_ssl'] else 'TLS' if smtp_config['use_tls'] else 'sin cifrado'})...")
+                    
+                    # Crear mensaje de correo
+                    sender = current_app.config.get('MAIL_DEFAULT_SENDER', 'AgroMarket <agromarket559@gmail.com>')
+                    msg = Message(
+                        subject='🔐 Código de Verificación - AgroMarket',
+                        recipients=[email],
+                        sender=sender,
+                        html=f'''
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -827,26 +872,70 @@ def forgot_password():
                 </body>
                 </html>
                 '''
-            )
+                    )
+                    
+                    # Intentar enviar el correo
+                    print(f"📤 Enviando correo a {email}...")
+                    print(f"   Código: {code_data['code']}")
+                    print(f"   Configuración: puerto {smtp_config['port']}, {'SSL' if smtp_config['use_ssl'] else 'TLS' if smtp_config['use_tls'] else 'sin cifrado'}")
+                    mail.send(msg)
+                    print("✅ ¡Correo enviado exitosamente!")
+                    print("=" * 60 + "\n")
+                    current_app.logger.info(f"✅ Correo enviado exitosamente a {email} (puerto {smtp_config['port']})")
+                    email_sent = True
+                    flash("✅ Correo enviado exitosamente. Por favor, revisa tu bandeja de entrada e ingresa el código de verificación.", "success")
+                    return render_template('auth/forgot_password.html', step='code', email=email)
+                    
+                except (OSError, ConnectionError, Exception) as e:
+                    last_error = e
+                    error_type = type(e).__name__
+                    error_msg = str(e)
+                    
+                    # Si es error de red, intentar siguiente configuración
+                    if isinstance(e, (OSError, ConnectionError)) or 'Network is unreachable' in error_msg or 'Connection refused' in error_msg or 'errno 101' in error_msg.lower():
+                        print(f"⚠️ Error de red con puerto {smtp_config['port']}: {error_msg}")
+                        current_app.logger.warning(f"⚠️ Error de red con puerto {smtp_config['port']}: {error_msg}")
+                        if config_index < len(smtp_configs) - 1:
+                            print(f"   Intentando siguiente configuración...")
+                            continue
+                    
+                    # Si es otro tipo de error y es la última configuración, reportarlo
+                    if config_index == len(smtp_configs) - 1:
+                        print(f"\n❌ ERROR AL ENVIAR CORREO (todos los intentos fallaron):")
+                        print(f"   Tipo: {error_type}")
+                        print(f"   Mensaje: {error_msg}")
+                        print(f"   Código generado: {code_data['code']}")
+                        print("=" * 60 + "\n")
+                        current_app.logger.error(f"❌ Error enviando correo a {email}: {error_msg}")
+                        current_app.logger.error(f"Tipo de error: {error_type}")
+                        break
             
-            # Intentar enviar el correo
-            print(f"📤 Enviando correo a {email}...")
-            print(f"   Código: {code_data['code']}")
-            mail.send(msg)
-            print("✅ ¡Correo enviado exitosamente!")
-            print("=" * 60 + "\n")
-            current_app.logger.info(f"✅ Correo enviado exitosamente a {email}")
-            flash("✅ Correo enviado exitosamente. Por favor, revisa tu bandeja de entrada e ingresa el código de verificación.", "success")
-            return render_template('auth/forgot_password.html', step='code', email=email)
+            # Si llegamos aquí y no se envió, todos los intentos fallaron
+            if not email_sent:
+                error_msg = str(last_error) if last_error else "Error desconocido"
+                error_type = type(last_error).__name__ if last_error else "UnknownError"
+                
+                # En modo debug, mostrar el código en consola
+                if current_app.config.get('DEBUG'):
+                    current_app.logger.warning(f"⚠️ CÓDIGO DE VERIFICACIÓN (fallback modo debug): {code_data['code']}")
+                    flash(f"⚠️ Error al enviar correo. Código de verificación (modo debug): {code_data['code']}. Posible bloqueo del firewall del hosting.", "warning")
+                    return render_template('auth/forgot_password.html', step='code', email=email)
+                
+                # Mensaje más específico para errores de red
+                if last_error and ('Network is unreachable' in error_msg or 'Connection refused' in error_msg or 'errno 101' in error_msg.lower()):
+                    flash("Error: El hosting está bloqueando conexiones SMTP salientes. Por favor, contacta al administrador del servidor para habilitar el puerto 587 o 465.", "danger")
+                else:
+                    flash("Error: No se pudo enviar el correo después de varios intentos. Por favor, contacta al administrador.", "danger")
+                return render_template('auth/forgot_password.html', step='email')
             
         except Exception as e:
             error_msg = str(e)
-            print(f"\n❌ ERROR AL ENVIAR CORREO:")
+            print(f"\n❌ ERROR INESPERADO AL ENVIAR CORREO:")
             print(f"   Tipo: {type(e).__name__}")
             print(f"   Mensaje: {error_msg}")
             print(f"   Código generado: {code_data['code']}")
             print("=" * 60 + "\n")
-            current_app.logger.error(f"❌ Error enviando correo a {email}: {error_msg}")
+            current_app.logger.error(f"❌ Error inesperado enviando correo a {email}: {error_msg}")
             current_app.logger.error(f"Tipo de error: {type(e).__name__}")
             
             # En modo debug, mostrar el código en consola y logs

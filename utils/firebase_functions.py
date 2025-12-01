@@ -60,7 +60,7 @@ def call_firebase_function(function_name, data, id_token=None):
             url,
             headers=headers,
             json=payload,  # Envolver en "data" para onCall
-            timeout=60,  # Aumentado timeout para producción
+            timeout=10,  # Timeout reducido a 10 segundos para fallar rápido y usar Flask-Mail
             verify=True  # Verificar certificados SSL
         )
         
@@ -82,14 +82,15 @@ def call_firebase_function(function_name, data, id_token=None):
             # Si no tiene "result", devolver directamente
             return result
         else:
-            error_msg = f"Error llamando a {function_name}: {response.status_code} - {response.text}"
+            # Para errores 500 (como DNS), fallar inmediatamente sin esperar más
+            error_msg = f"Error llamando a {function_name}: {response.status_code} - {response.text[:500]}"
             try:
                 current_app.logger.error(error_msg)
             except RuntimeError:
                 print(error_msg)
             return None
     except requests.exceptions.Timeout:
-        error_msg = f"Timeout llamando a {function_name} (más de 60 segundos)"
+        error_msg = f"Timeout llamando a {function_name} (más de 10 segundos)"
         try:
             current_app.logger.error(error_msg)
         except RuntimeError:
