@@ -1,6 +1,6 @@
 # Rutas generales de AgroMarket
 
-from flask import Blueprint, render_template, jsonify, request, current_app
+from flask import Blueprint, render_template, jsonify, request, current_app, send_from_directory, abort
 from flask_mail import Message
 import sys
 import os
@@ -44,6 +44,41 @@ def aviso_privacidad():
 def soporte():
     """Página de soporte"""
     return render_template("general/soporte.html")
+
+@general_bp.route("/descargar-apk")
+def descargar_apk():
+    """Descargar el archivo APK de la aplicación"""
+    try:
+        # Obtener la ruta base del proyecto
+        # current_app.root_path apunta al directorio de templates, necesitamos subir un nivel
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        
+        # Ruta del archivo APK
+        apk_path = os.path.join(base_dir, 'general', 'app-release.apk')
+        apk_path = os.path.abspath(apk_path)
+        
+        # Verificar que el archivo existe
+        if not os.path.exists(apk_path):
+            current_app.logger.error(f"Archivo APK no encontrado en: {apk_path}")
+            abort(404, description="Archivo APK no encontrado. Por favor, contacta al administrador.")
+        
+        # Obtener el directorio y el nombre del archivo
+        apk_dir = os.path.dirname(apk_path)
+        apk_filename = os.path.basename(apk_path)
+        
+        current_app.logger.info(f"Sirviendo APK: {apk_filename} desde {apk_dir}")
+        
+        # Enviar el archivo
+        return send_from_directory(
+            apk_dir,
+            apk_filename,
+            as_attachment=True,
+            download_name='AgroMarket.apk',
+            mimetype='application/vnd.android.package-archive'
+        )
+    except Exception as e:
+        current_app.logger.error(f"Error al descargar APK: {str(e)}", exc_info=True)
+        abort(500, description="Error al descargar el archivo APK")
 
 @general_bp.route("/api/noticias")
 def api_noticias():
