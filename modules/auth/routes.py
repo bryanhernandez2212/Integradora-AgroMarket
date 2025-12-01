@@ -548,21 +548,71 @@ def get_user_by_email(email):
     """
     # Intentar con Firebase Admin SDK solo si está disponible
     if not FIREBASE_ADMIN_AVAILABLE:
+        print("⚠️ Firebase Admin SDK no disponible")
         return None
     
     try:
         app = initialize_firebase_admin()
         if not app:
+            print("⚠️ Firebase Admin SDK no se pudo inicializar")
             return None
         
-        # Buscar usuario por email
-        user = firebase_auth.get_user_by_email(email)
-        return user
-    except firebase_auth.UserNotFoundError:
-        return None
+        # Normalizar email (minúsculas, sin espacios)
+        email_normalized = email.lower().strip()
+        print(f"🔍 Buscando usuario con email normalizado: {email_normalized}")
+        
+        # Intentar buscar con el email normalizado
+        try:
+            user = firebase_auth.get_user_by_email(email_normalized)
+            print(f"✅ Usuario encontrado: {user.uid}, email: {user.email}")
+            return user
+        except firebase_auth.UserNotFoundError:
+            print(f"⚠️ Usuario no encontrado con email normalizado: {email_normalized}")
+            # Intentar listar usuarios para encontrar el email (útil para debugging)
+            try:
+                print(f"🔍 Listando usuarios para buscar email...")
+                list_users = firebase_auth.list_users(max_results=1000)
+                found_user = None
+                for user_record in list_users.users:
+                    if user_record.email:
+                        user_email_normalized = user_record.email.lower().strip()
+                        if user_email_normalized == email_normalized:
+                            found_user = user_record
+                            print(f"✅ Usuario encontrado en lista: {user_record.uid}, email: {user_record.email}")
+                            break
+                
+                if found_user:
+                    return found_user
+                else:
+                    print(f"❌ Usuario no encontrado en la lista de usuarios")
+                    # Mostrar algunos emails para debugging (solo primeros 5)
+                    print(f"📋 Emails en Firebase Auth (primeros 5):")
+                    count = 0
+                    for user_record in list_users.users:
+                        if user_record.email and count < 5:
+                            print(f"   - {user_record.email}")
+                            count += 1
+            except Exception as list_error:
+                print(f"⚠️ Error al listar usuarios: {str(list_error)}")
+            
+            # Intentar con el email original (por si acaso)
+            if email_normalized != email:
+                try:
+                    print(f"🔍 Intentando con email original: {email}")
+                    user = firebase_auth.get_user_by_email(email)
+                    print(f"✅ Usuario encontrado con email original: {user.uid}")
+                    return user
+                except firebase_auth.UserNotFoundError:
+                    print(f"⚠️ Usuario no encontrado con email original: {email}")
+                    return None
+            return None
     except Exception as e:
-        # No loggear error como crítico, ya que Firebase Functions manejará esto
-        current_app.logger.debug(f"Firebase Admin no disponible para verificar usuario: {str(e)}")
+        error_msg = f"Error obteniendo usuario por email: {str(e)}"
+        print(f"❌ {error_msg}")
+        print(f"   Tipo: {type(e).__name__}")
+        current_app.logger.error(error_msg)
+        import traceback
+        current_app.logger.error(traceback.format_exc())
         return None
 
 def update_user_password_via_rest_api(email, new_password):
@@ -637,21 +687,58 @@ def update_user_password(email, new_password):
                     else:
                         print("⚠️ Usuario no encontrado con Admin SDK")
                         current_app.logger.warning(f"⚠️ Usuario no encontrado para {email}")
-                        # Intentar buscar por email sin importar mayúsculas/minúsculas
+                        
+                        # Intentar listar usuarios para verificar si existe (útil para debugging)
                         try:
-                            # Firebase Admin SDK busca por email exacto, intentar con email en minúsculas
+                            print(f"🔍 Intentando listar usuarios para verificar existencia...")
+                            # Listar usuarios (limitado a 1000 para debugging)
+                            list_users = firebase_auth.list_users(max_results=1000)
+                            found_user = None
                             email_lower = email.lower().strip()
-                            if email_lower != email:
-                                print(f"🔍 Intentando buscar con email en minúsculas: {email_lower}")
-                                user = firebase_auth.get_user_by_email(email_lower)
-                                if user:
-                                    print(f"✅ Usuario encontrado con email en minúsculas: {user.uid}")
-                                    firebase_auth.update_user(user.uid, password=new_password)
+                            
+                            print(f"📋 Buscando en {len(list_users.users)} usuarios...")
+                            for user_record in list_users.users:
+                                if user_record.email:
+                                    user_email_lower = user_record.email.lower().strip()
+                                    if user_email_lower == email_lower:
+                                        found_user = user_record
+                                        print(f"✅ Usuario encontrado en lista: {user_record.uid}")
+                                        print(f"   Email en Firebase: {user_record.email}")
+                                        print(f"   Email buscado: {email}")
+                                        break
+                            
+                            if found_user:
+                                print(f"🔄 Actualizando contraseña para usuario encontrado: {found_user.uid}")
+                                try:
+                                    firebase_auth.update_user(found_user.uid, password=new_password)
                                     print("✅ Contraseña actualizada exitosamente")
-                                    current_app.logger.info(f"✅ Contraseña actualizada para {email_lower}")
+                                    current_app.logger.info(f"✅ Contraseña actualizada para {found_user.email}")
                                     return True
-                        except Exception as lower_error:
-                            print(f"⚠️ No se encontró usuario con email en minúsculas: {str(lower_error)}")
+                                except Exception as update_error:
+                                    error_msg = f"Error al actualizar contraseña del usuario encontrado: {str(update_error)}"
+                                    print(f"❌ {error_msg}")
+                                    current_app.logger.error(error_msg)
+                                    import traceback
+                                    current_app.logger.error(traceback.format_exc())
+                                    return False
+                            else:
+                                print(f"❌ Usuario no encontrado en la lista de {len(list_users.users)} usuarios")
+                                # Mostrar algunos emails para debugging (solo primeros 10)
+                                print(f"📋 Emails en Firebase Auth (primeros 10):")
+                                count = 0
+                                for user_record in list_users.users:
+                                    if user_record.email and count < 10:
+                                        print(f"   {count+1}. {user_record.email}")
+                                        count += 1
+                                current_app.logger.error(f"❌ Usuario {email} no existe en Firebase Auth")
+                        except Exception as list_error:
+                            error_msg = f"Error al listar usuarios: {str(list_error)}"
+                            print(f"❌ {error_msg}")
+                            print(f"   Tipo: {type(list_error).__name__}")
+                            current_app.logger.error(error_msg)
+                            import traceback
+                            current_app.logger.error(traceback.format_exc())
+                        
                         return False
                 except Exception as user_error:
                     error_msg = f"Error obteniendo usuario: {str(user_error)}"
@@ -1052,7 +1139,7 @@ def reset_password():
         flash("Debes verificar el código primero.", "danger")
         return redirect(url_for('auth.forgot_password'))
     
-    email = session.get('reset_password_email', '')
+    email = session.get('reset_password_email', '').lower().strip()
     code_hash = session.get('reset_password_code_hash', '')
     
     if not email:
@@ -1105,8 +1192,11 @@ def reset_password():
             return render_template('auth/reset_password.html', valid=True, email=email)
         
         # Intentar actualizar la contraseña en Firebase Auth
-        print("🔄 Intentando actualizar contraseña...")
-        if update_user_password(email, password):
+        # Normalizar email antes de buscar (Firebase Auth guarda emails en minúsculas)
+        email_normalized = email.lower().strip()
+        print(f"🔄 Intentando actualizar contraseña para: {email_normalized}")
+        print(f"   Email original de sesión: {email}")
+        if update_user_password(email_normalized, password):
             print("✅ Contraseña actualizada exitosamente")
             
             # Marcar código como usado si está disponible
