@@ -31,9 +31,9 @@ class Config:
     MAIL_SERVER = os.environ.get('MAIL_SERVER') or 'smtp.gmail.com'
     MAIL_PORT = int(os.environ.get('MAIL_PORT') or 587)
     MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'true').lower() in ['true', 'on', '1']
-    MAIL_USERNAME = os.environ.get('MAIL_USERNAME') or 'agromarket559@gmail.com'  # ⬅️ Reemplaza con tu email de Gmail
-    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD') or 'xnzf mxvp vjbi iioj'  # Contraseña de aplicación de Gmail
-    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER') or 'AgroMarket <agromarket559@gmail.com>'  # ⬅️ Reemplaza con tu email
+    MAIL_USERNAME = os.environ.get('MAIL_USERNAME') or 'bry.hluna@gmail.com'  # Email de Gmail para envío de correos
+    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD') or 'bqbn kwle jnrk ulpd'  # Contraseña de aplicación de Gmail
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER') or 'AgroMarket <bry.hluna@gmail.com>'  # Email remitente
 
     # Firebase Admin / Firestore
     FIREBASE_CREDENTIALS_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH')
@@ -65,9 +65,9 @@ class ProductionConfig(Config):
     MAIL_SERVER = os.environ.get('MAIL_SERVER') or 'smtp.gmail.com'
     MAIL_PORT = int(os.environ.get('MAIL_PORT') or 587)
     MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'true').lower() in ['true', 'on', '1']
-    MAIL_USERNAME = os.environ.get('MAIL_USERNAME') or 'agromarket559@gmail.com'  # Mismo valor que en desarrollo
-    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD') or 'xnzf mxvp vjbi iioj'  # Mismo valor que en desarrollo
-    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER') or 'AgroMarket <agromarket559@gmail.com>'
+    MAIL_USERNAME = os.environ.get('MAIL_USERNAME') or 'bry.hluna@gmail.com'  # Mismo valor que en desarrollo
+    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD') or 'bqbn kwle jnrk ulpd'  # Mismo valor que en desarrollo
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER') or 'AgroMarket <bry.hluna@gmail.com>'
 
 # Configuración por defecto
 config = {
