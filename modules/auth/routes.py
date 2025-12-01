@@ -250,21 +250,42 @@ def initialize_firebase_admin():
         
         # Buscar archivo de credenciales en varios lugares (orden de prioridad)
         possible_paths = [
-            # 1. Variable de entorno (mayor prioridad)
+            # 1. Variable de entorno GOOGLE_APPLICATION_CREDENTIALS (ruta al archivo)
             os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'),
-            # 2. Para Docker/producción: buscar en /app (directorio común en contenedores)
+            # 2. Variable de entorno FIREBASE_SERVICE_ACCOUNT_JSON (contenido JSON como string)
+            # Si existe, crear archivo temporal
+            None,  # Se manejará después
+            # 3. Para Docker/producción: buscar en /app (directorio común en contenedores)
             '/app/config/serviceAccountKey.json',  # Primero config/ dentro de /app
             '/app/serviceAccountKey.json',
-            # 3. Archivo en config/ del proyecto (donde está en el repositorio)
+            # 4. Archivo en config/ del proyecto (donde está en el repositorio)
             os.path.join(base_dir, 'config', 'serviceAccountKey.json'),
-            # 4. Archivo en el directorio raíz del proyecto
+            # 5. Archivo en el directorio raíz del proyecto
             os.path.join(base_dir, 'serviceAccountKey.json'),
-            # 5. Para producción: buscar en directorio actual de trabajo
+            # 6. Para producción: buscar en directorio actual de trabajo
             os.path.join(current_dir, 'config', 'serviceAccountKey.json'),
             os.path.join(current_dir, 'serviceAccountKey.json'),
-            # 6. Archivo alternativo
+            # 7. Archivo alternativo
             os.path.join(base_dir, 'firebase-service-account.json'),
         ]
+        
+        # Verificar si hay credenciales en variable de entorno FIREBASE_SERVICE_ACCOUNT_JSON
+        service_account_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
+        if service_account_json:
+            try:
+                import json
+                import tempfile
+                # Validar que sea JSON válido
+                json.loads(service_account_json)
+                # Crear archivo temporal con las credenciales
+                temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+                temp_file.write(service_account_json)
+                temp_file.close()
+                possible_paths.insert(1, temp_file.name)  # Insertar en posición 1
+                print(f"📁 Usando credenciales desde variable de entorno FIREBASE_SERVICE_ACCOUNT_JSON (archivo temporal)")
+            except (json.JSONDecodeError, Exception) as e:
+                print(f"⚠️ Error procesando FIREBASE_SERVICE_ACCOUNT_JSON: {str(e)}")
+                # Continuar con otras opciones
         
         print(f"🔍 Buscando archivo de credenciales en {len(possible_paths)} ubicaciones...")
         cred_path = None
@@ -290,54 +311,18 @@ def initialize_firebase_admin():
             return app
         else:
             print("⚠️ No se encontró archivo de credenciales en ninguna ubicación")
-            # Intentar usar credenciales por defecto o inicializar con project ID
-            try:
-                # Asegurar que project_id esté definido (usar el mismo que en móvil)
-                if 'project_id' not in locals():
-                    project_id = os.environ.get('FIREBASE_PROJECT_ID') or \
-                                os.environ.get('GOOGLE_CLOUD_PROJECT') or \
-                                current_app.config.get('FIREBASE_PROJECT_ID') or \
-                                'agromarket-625b2'  # Mismo valor que en static/js/firebase-config.js
-                
-                print(f"🔧 Intentando inicializar con project ID: {project_id}")
-                current_app.logger.info(f"🔧 Intentando inicializar Firebase Admin con project ID: {project_id}")
-                
-                # IMPORTANTE: Siempre pasar projectId, incluso sin credenciales
-                # Firebase Admin SDK requiere projectId para funcionar correctamente
-                app = firebase_admin.initialize_app(options={
-                    'projectId': project_id
-                })
-                
-                print(f"✅ Firebase Admin SDK inicializado con project ID: {project_id} (sin archivo de credenciales)")
-                current_app.logger.info(f"✅ Firebase Admin SDK inicializado con project ID: {project_id} (sin archivo de credenciales)")
-                current_app.logger.warning("⚠️ Usando credenciales por defecto del entorno (Application Default Credentials)")
-                return app
-                
-            except Exception as default_error:
-                # Si falla, intentar con variable de entorno GOOGLE_CLOUD_PROJECT
-                print(f"⚠️ Error inicializando con opciones, intentando con GOOGLE_CLOUD_PROJECT...")
-                print(f"   Error: {str(default_error)}")
-                
-                # Establecer variable de entorno si no está configurada
-                if not os.environ.get('GOOGLE_CLOUD_PROJECT'):
-                    os.environ['GOOGLE_CLOUD_PROJECT'] = project_id
-                    print(f"🔧 Establecido GOOGLE_CLOUD_PROJECT={project_id}")
-                
-                try:
-                    # Intentar nuevamente después de establecer la variable de entorno
-                    app = firebase_admin.initialize_app(options={
-                        'projectId': project_id
-                    })
-                    print(f"✅ Firebase Admin SDK inicializado con GOOGLE_CLOUD_PROJECT={project_id}")
-                    current_app.logger.info(f"✅ Firebase Admin SDK inicializado con GOOGLE_CLOUD_PROJECT={project_id}")
-                    return app
-                except Exception as final_error:
-                    print(f"❌ Error final inicializando Firebase Admin: {str(final_error)}")
-                    current_app.logger.error(f"❌ Error inicializando Firebase Admin: {str(final_error)}")
-                    current_app.logger.warning("⚠️ Firebase Admin no está configurado correctamente.")
-                    current_app.logger.warning(f"   Project ID usado: {project_id}")
-                    current_app.logger.warning(f"   GOOGLE_CLOUD_PROJECT: {os.environ.get('GOOGLE_CLOUD_PROJECT', 'NO CONFIGURADO')}")
-                    return None
+            current_app.logger.warning("⚠️ No se encontró archivo de credenciales de Firebase Admin SDK")
+            current_app.logger.warning("⚠️ Firebase Admin SDK no podrá funcionar sin credenciales válidas")
+            current_app.logger.warning("⚠️ Para usar Firebase Admin SDK en producción, necesitas:")
+            current_app.logger.warning("   1. Subir el archivo serviceAccountKey.json a /app/config/serviceAccountKey.json")
+            current_app.logger.warning("   2. O configurar GOOGLE_APPLICATION_CREDENTIALS con la ruta al archivo")
+            current_app.logger.warning("   3. O configurar Application Default Credentials en el servidor")
+            
+            # NO inicializar sin credenciales - esto causará errores al usar los servicios
+            # Retornar None para indicar que Firebase Admin SDK no está disponible
+            print("❌ Firebase Admin SDK no puede inicializarse sin credenciales válidas")
+            print("   Los servicios de autenticación requieren credenciales del service account")
+            return None
     except Exception as e:
         print(f"❌ Error inicializando Firebase Admin: {str(e)}")
         print(f"   Tipo: {type(e).__name__}")
@@ -618,26 +603,21 @@ def get_user_by_email(email):
 def update_user_password_via_rest_api(email, new_password):
     """Actualiza la contraseña usando Firebase REST API (sin Admin SDK)
     
-    Usa el endpoint de Firebase Auth REST API para actualizar la contraseña.
-    Requiere obtener un token de acceso primero.
+    NOTA: Firebase Auth REST API requiere que el usuario esté autenticado para cambiar la contraseña.
+    Sin embargo, podemos usar el endpoint de "setAccountInfo" con un token ID del usuario.
+    Pero esto requiere que el usuario haya iniciado sesión primero.
+    
+    Alternativa: Usar Firebase Functions para actualizar la contraseña.
     """
     try:
-        import requests
+        # Firebase Auth REST API no permite cambiar contraseña sin autenticación del usuario
+        # La única forma es:
+        # 1. Usar Firebase Admin SDK (requiere credenciales)
+        # 2. Usar Firebase Functions (ya implementado para otros casos)
+        # 3. Hacer que el usuario inicie sesión primero y luego cambiar desde el frontend
         
-        # Obtener API key de Firebase
-        api_key = current_app.config.get('FIREBASE_API_KEY') or 'AIzaSyDZWmY0ggZthOKv17yHH57pkXsie_U2YnI'
-        project_id = current_app.config.get('FIREBASE_PROJECT_ID') or 'agromarket-625b2'
-        
-        # Firebase Auth REST API endpoint para actualizar contraseña
-        # Necesitamos autenticar al usuario primero, pero como no tenemos sesión,
-        # usaremos el método de "sendOobCode" y luego "resetPassword"
-        # Sin embargo, esto requiere un código OOB de Firebase, no nuestro código personalizado
-        
-        # Alternativa: Usar el endpoint de actualización de perfil con un token
-        # Pero necesitamos que el usuario esté autenticado
-        
-        current_app.logger.warning("update_user_password_via_rest_api: Requiere autenticación del usuario")
-        print("⚠️ REST API requiere autenticación del usuario (no disponible sin Admin SDK)")
+        current_app.logger.warning("update_user_password_via_rest_api: No disponible sin autenticación del usuario")
+        print("⚠️ REST API requiere autenticación del usuario (no disponible sin Admin SDK o sesión activa)")
         return False
     except Exception as e:
         current_app.logger.error(f"Error en update_user_password_via_rest_api: {str(e)}")
@@ -1196,6 +1176,24 @@ def reset_password():
         email_normalized = email.lower().strip()
         print(f"🔄 Intentando actualizar contraseña para: {email_normalized}")
         print(f"   Email original de sesión: {email}")
+        
+        # Verificar si Firebase Admin SDK está disponible y tiene credenciales
+        app = initialize_firebase_admin()
+        if not app:
+            # Si no hay credenciales, mostrar mensaje claro al usuario
+            error_msg = "El servidor no tiene configuradas las credenciales de Firebase Admin SDK. Por favor, contacta al administrador para configurar el archivo serviceAccountKey.json en el servidor."
+            print(f"❌ {error_msg}")
+            current_app.logger.error(error_msg)
+            
+            if request.is_json:
+                return jsonify({
+                    'success': False,
+                    'message': 'El servidor necesita configuración adicional. Por favor, contacta al administrador para configurar Firebase Admin SDK.'
+                }), 400
+            
+            flash("El servidor necesita configuración adicional para cambiar contraseñas. Por favor, contacta al administrador.", "danger")
+            return render_template('auth/reset_password.html', valid=True, email=email)
+        
         if update_user_password(email_normalized, password):
             print("✅ Contraseña actualizada exitosamente")
             
