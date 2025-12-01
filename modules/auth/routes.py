@@ -915,17 +915,49 @@ def forgot_password():
                 error_msg = str(last_error) if last_error else "Error desconocido"
                 error_type = type(last_error).__name__ if last_error else "UnknownError"
                 
-                # En modo debug, mostrar el código en consola
-                if current_app.config.get('DEBUG'):
-                    current_app.logger.warning(f"⚠️ CÓDIGO DE VERIFICACIÓN (fallback modo debug): {code_data['code']}")
-                    flash(f"⚠️ Error al enviar correo. Código de verificación (modo debug): {code_data['code']}. Posible bloqueo del firewall del hosting.", "warning")
+                # FALLBACK: Si el hosting bloquea SMTP, mostrar código en logs y permitir continuar
+                # Esto permite que el usuario recupere su contraseña mientras se resuelve el problema del hosting
+                is_network_error = last_error and (
+                    'Network is unreachable' in error_msg or 
+                    'Connection refused' in error_msg or 
+                    'errno 101' in error_msg.lower() or
+                    isinstance(last_error, (OSError, ConnectionError))
+                )
+                
+                if is_network_error:
+                    # Como el hosting bloquea SMTP, registrar código en logs como fallback temporal
+                    print("\n" + "=" * 60)
+                    print("⚠️ FALLBACK: Hosting bloquea conexiones SMTP")
+                    print("=" * 60)
+                    print(f"⚠️ CÓDIGO DE VERIFICACIÓN PARA {email}:")
+                    print(f"   {code_data['code']}")
+                    print("=" * 60)
+                    print("⚠️ IMPORTANTE: El hosting está bloqueando conexiones SMTP salientes.")
+                    print("   Para resolver esto, contacta al administrador del hosting")
+                    print("   para habilitar los puertos 587 y 465.")
+                    print("=" * 60 + "\n")
+                    
+                    current_app.logger.error(f"❌ Hosting bloquea SMTP - CÓDIGO DE VERIFICACIÓN para {email}: {code_data['code']}")
+                    current_app.logger.error("⚠️ FALLBACK ACTIVADO: Código disponible en logs del servidor")
+                    
+                    # Mostrar código al usuario como fallback temporal
+                    # En producción, esto permite que el usuario continúe aunque el correo no se envíe
+                    flash(
+                        f"⚠️ No se pudo enviar el correo (el hosting bloquea conexiones SMTP). "
+                        f"Código de verificación: {code_data['code']}. "
+                        f"Por favor, contacta al administrador del hosting para habilitar puertos SMTP.",
+                        "warning"
+                    )
+                    # Permitir continuar con el código (el usuario lo tiene ahora)
                     return render_template('auth/forgot_password.html', step='code', email=email)
                 
-                # Mensaje más específico para errores de red
-                if last_error and ('Network is unreachable' in error_msg or 'Connection refused' in error_msg or 'errno 101' in error_msg.lower()):
-                    flash("Error: El hosting está bloqueando conexiones SMTP salientes. Por favor, contacta al administrador del servidor para habilitar el puerto 587 o 465.", "danger")
-                else:
-                    flash("Error: No se pudo enviar el correo después de varios intentos. Por favor, contacta al administrador.", "danger")
+                # Para otros errores (no de red)
+                if current_app.config.get('DEBUG'):
+                    current_app.logger.warning(f"⚠️ CÓDIGO DE VERIFICACIÓN (fallback modo debug): {code_data['code']}")
+                    flash(f"⚠️ Error al enviar correo. Código de verificación (modo debug): {code_data['code']}", "warning")
+                    return render_template('auth/forgot_password.html', step='code', email=email)
+                
+                flash("Error: No se pudo enviar el correo después de varios intentos. Por favor, contacta al administrador.", "danger")
                 return render_template('auth/forgot_password.html', step='email')
             
         except Exception as e:
