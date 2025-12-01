@@ -2,6 +2,17 @@
 # Usa Firebase Firestore como base de datos
 
 import os
+
+# Cargar variables de entorno desde archivo .env (si existe)
+# Útil para hostings tradicionales que no tienen panel de variables de entorno
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # Busca archivo .env en la raíz del proyecto
+except ImportError:
+    # Si python-dotenv no está instalado, simplemente continuar
+    # Las variables de entorno del sistema seguirán funcionando
+    pass
+
 from flask import Flask, render_template
 from flask_mail import Mail
 from config.app import config
@@ -21,17 +32,20 @@ def create_app(config_name='development'):
     """Factory para crear la aplicación Flask"""
     app = Flask(__name__)
     
-    # Detectar si estamos en producción (Railway, Heroku, Render, etc.)
-    # Railway usa la variable de entorno RAILWAY_ENVIRONMENT
-    # Heroku usa DYNO
-    # Render usa RENDER
-    # Otros hostings pueden usar FLASK_ENV=production o PRODUCTION=true
+    # Detectar si estamos en producción
+    # Prioridad: FLASK_ENV > PRODUCTION > otras variables comunes
+    flask_env = os.environ.get('FLASK_ENV', '').lower()
+    production_var = os.environ.get('PRODUCTION', '').lower()
+    
+    # Hostings comunes:
+    # - cPanel/VPS tradicionales: usar FLASK_ENV=production
+    # - Heroku: usa DYNO automáticamente
+    # - Render: usa RENDER automáticamente
     production_indicators = [
-        os.environ.get('RAILWAY_ENVIRONMENT'),
+        flask_env == 'production',
+        production_var == 'true',
         os.environ.get('DYNO'),  # Heroku
         os.environ.get('RENDER'),  # Render
-        os.environ.get('PRODUCTION', '').lower() == 'true',
-        os.environ.get('FLASK_ENV', '').lower() == 'production',
     ]
     
     if any(production_indicators):
@@ -51,20 +65,30 @@ def create_app(config_name='development'):
     mail.init_app(app)
     
     # Validar configuración de correo en producción
+    # NOTA: Los correos se envían con Firebase Functions, no con Flask-Mail directamente
+    # Flask-Mail solo se usa como respaldo si Firebase Functions falla
     if config_name == 'production':
+        print("📧 Sistema de correos:")
+        print("   Principal: Firebase Functions (requiere secrets configurados en Firebase)")
+        print("   Respaldo: Flask-Mail (usa variables de entorno)")
+        
+        # Verificar si Firebase Functions está disponible
+        try:
+            from utils.firebase_functions import call_firebase_function
+            print("   ✅ Firebase Functions disponible")
+        except ImportError:
+            print("   ⚠️ Firebase Functions no disponible, solo se usará Flask-Mail")
+        
+        # Verificar configuración de Flask-Mail (respaldo)
         mail_config = {
             'MAIL_SERVER': app.config.get('MAIL_SERVER'),
             'MAIL_USERNAME': app.config.get('MAIL_USERNAME'),
             'MAIL_PASSWORD': 'Configurada' if app.config.get('MAIL_PASSWORD') else 'NO CONFIGURADA'
         }
-        print("📧 Configuración de correo en producción:")
-        print(f"   Servidor: {mail_config['MAIL_SERVER']}")
-        print(f"   Usuario: {mail_config['MAIL_USERNAME']}")
-        print(f"   Contraseña: {mail_config['MAIL_PASSWORD']}")
+        print(f"   Flask-Mail (respaldo): Servidor={mail_config['MAIL_SERVER']}, Usuario={mail_config['MAIL_USERNAME']}")
         
-        if not app.config.get('MAIL_USERNAME') or not app.config.get('MAIL_PASSWORD'):
-            print("⚠️ ADVERTENCIA: Variables de entorno de correo no configuradas correctamente")
-            print("   Configura MAIL_USERNAME y MAIL_PASSWORD en las variables de entorno del hosting")
+        if not mail_config['MAIL_PASSWORD']:
+            print("   ⚠️ Flask-Mail no configurado (solo afecta si Firebase Functions falla)")
     
     # Registrar blueprints
     app.register_blueprint(general_bp)

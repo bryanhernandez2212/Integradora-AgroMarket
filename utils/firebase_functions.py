@@ -30,6 +30,10 @@ def call_firebase_function(function_name, data, id_token=None):
     """
     url = get_firebase_functions_url(function_name)
     
+    # Firebase Functions v2 onCall espera el formato: {"data": {...}}
+    # Pero cuando se llama via HTTP directamente, el formato es diferente
+    # Intentamos ambos formatos por compatibilidad
+    
     headers = {
         'Content-Type': 'application/json',
     }
@@ -37,30 +41,75 @@ def call_firebase_function(function_name, data, id_token=None):
     if id_token:
         headers['Authorization'] = f'Bearer {id_token}'
     
+    # Formato para onCall: envolver en "data"
+    payload = {
+        'data': data
+    }
+    
     try:
+        # Logging detallado para debugging en producción
+        try:
+            current_app.logger.info(
+                f"📞 Llamando a Firebase Function: {function_name} "
+                f"URL: {url}"
+            )
+        except RuntimeError:
+            print(f"📞 Llamando a Firebase Function: {function_name} URL: {url}")
+        
         response = requests.post(
             url,
             headers=headers,
-            json=data,
-            timeout=30
+            json=payload,  # Envolver en "data" para onCall
+            timeout=60,  # Aumentado timeout para producción
+            verify=True  # Verificar certificados SSL
         )
         
-        if response.status_code == 200:
-            return response.json()
-        else:
-            try:
-                current_app.logger.error(
-                    f"Error llamando a {function_name}: "
-                    f"{response.status_code} - {response.text}"
-                )
-            except RuntimeError:
-                print(f"Error llamando a {function_name}: {response.status_code} - {response.text}")
-            return None
-    except Exception as e:
+        # Logging de respuesta
         try:
-            current_app.logger.error(f"Excepción llamando a {function_name}: {str(e)}")
+            current_app.logger.info(
+                f"📥 Respuesta de {function_name}: "
+                f"Status: {response.status_code}, "
+                f"Body: {response.text[:200]}"  # Primeros 200 caracteres
+            )
         except RuntimeError:
-            print(f"Excepción llamando a {function_name}: {str(e)}")
+            print(f"📥 Respuesta de {function_name}: Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            result = response.json()
+            # onCall devuelve {"result": {...}} cuando es exitoso
+            if 'result' in result:
+                return result['result']
+            # Si no tiene "result", devolver directamente
+            return result
+        else:
+            error_msg = f"Error llamando a {function_name}: {response.status_code} - {response.text}"
+            try:
+                current_app.logger.error(error_msg)
+            except RuntimeError:
+                print(error_msg)
+            return None
+    except requests.exceptions.Timeout:
+        error_msg = f"Timeout llamando a {function_name} (más de 60 segundos)"
+        try:
+            current_app.logger.error(error_msg)
+        except RuntimeError:
+            print(error_msg)
+        return None
+    except requests.exceptions.ConnectionError as e:
+        error_msg = f"Error de conexión llamando a {function_name}: {str(e)}"
+        try:
+            current_app.logger.error(error_msg)
+        except RuntimeError:
+            print(error_msg)
+        return None
+    except Exception as e:
+        error_msg = f"Excepción llamando a {function_name}: {str(e)}"
+        try:
+            current_app.logger.error(error_msg, exc_info=True)
+        except RuntimeError:
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
         return None
 
 def send_password_reset_code_via_functions(email, code, nombre=None):
