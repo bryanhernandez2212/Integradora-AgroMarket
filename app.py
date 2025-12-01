@@ -21,10 +21,22 @@ def create_app(config_name='development'):
     """Factory para crear la aplicación Flask"""
     app = Flask(__name__)
     
-    # Detectar si estamos en producción (Railway, Heroku, etc.)
+    # Detectar si estamos en producción (Railway, Heroku, Render, etc.)
     # Railway usa la variable de entorno RAILWAY_ENVIRONMENT
-    if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('DYNO') or os.environ.get('PRODUCTION'):
+    # Heroku usa DYNO
+    # Render usa RENDER
+    # Otros hostings pueden usar FLASK_ENV=production o PRODUCTION=true
+    production_indicators = [
+        os.environ.get('RAILWAY_ENVIRONMENT'),
+        os.environ.get('DYNO'),  # Heroku
+        os.environ.get('RENDER'),  # Render
+        os.environ.get('PRODUCTION', '').lower() == 'true',
+        os.environ.get('FLASK_ENV', '').lower() == 'production',
+    ]
+    
+    if any(production_indicators):
         config_name = 'production'
+        print("🔧 Modo PRODUCCIÓN detectado")
     
     # Configuración
     app.config.from_object(config[config_name])
@@ -37,6 +49,22 @@ def create_app(config_name='development'):
     
     # Inicializar Flask-Mail
     mail.init_app(app)
+    
+    # Validar configuración de correo en producción
+    if config_name == 'production':
+        mail_config = {
+            'MAIL_SERVER': app.config.get('MAIL_SERVER'),
+            'MAIL_USERNAME': app.config.get('MAIL_USERNAME'),
+            'MAIL_PASSWORD': 'Configurada' if app.config.get('MAIL_PASSWORD') else 'NO CONFIGURADA'
+        }
+        print("📧 Configuración de correo en producción:")
+        print(f"   Servidor: {mail_config['MAIL_SERVER']}")
+        print(f"   Usuario: {mail_config['MAIL_USERNAME']}")
+        print(f"   Contraseña: {mail_config['MAIL_PASSWORD']}")
+        
+        if not app.config.get('MAIL_USERNAME') or not app.config.get('MAIL_PASSWORD'):
+            print("⚠️ ADVERTENCIA: Variables de entorno de correo no configuradas correctamente")
+            print("   Configura MAIL_USERNAME y MAIL_PASSWORD en las variables de entorno del hosting")
     
     # Registrar blueprints
     app.register_blueprint(general_bp)

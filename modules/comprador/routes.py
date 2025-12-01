@@ -523,9 +523,11 @@ def enviar_ticket_compra():
         '''
         
         # Crear y enviar el correo
+        sender = current_app.config.get('MAIL_DEFAULT_SENDER', 'AgroMarket <agromarket559@gmail.com>')
         msg = Message(
             subject=f'🎉 Confirmación de Compra - Pedido #{compra_id[:9].upper()}',
             recipients=[email_cliente],
+            sender=sender,
             html=html_body
         )
         
@@ -892,9 +894,11 @@ def api_enviar_correo_cambio_estado():
         '''
         
         # Crear y enviar el correo
+        sender = current_app.config.get('MAIL_DEFAULT_SENDER', 'AgroMarket <agromarket559@gmail.com>')
         msg = Message(
             subject=f'📦 Actualización de Pedido #{compra_id[:9].upper()} - {estado_label}',
             recipients=[email],
+            sender=sender,
             html=html_body
         )
         
@@ -1043,9 +1047,11 @@ def enviar_notificacion_devolucion():
         '''
         
         # Crear y enviar el correo
+        sender = current_app.config.get('MAIL_DEFAULT_SENDER', 'AgroMarket <agromarket559@gmail.com>')
         msg = Message(
             subject=f'✅ Devolución Procesada - Pedido #{compra_id[:9].upper()}',
             recipients=[email_cliente],
+            sender=sender,
             html=html_body
         )
         

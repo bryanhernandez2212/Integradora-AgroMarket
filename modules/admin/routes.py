@@ -229,9 +229,11 @@ def api_enviar_correo_aprobacion():
         '''
         
         # Crear y enviar el correo
+        sender = current_app.config.get('MAIL_DEFAULT_SENDER', 'AgroMarket <agromarket559@gmail.com>')
         msg = Message(
             subject='✅ Solicitud de Vendedor Aprobada - AgroMarket',
             recipients=[email],
+            sender=sender,
             html=html_body
         )
         
@@ -338,9 +340,11 @@ def api_enviar_correo_rechazo():
         '''
         
         # Crear y enviar el correo
+        sender = current_app.config.get('MAIL_DEFAULT_SENDER', 'AgroMarket <agromarket559@gmail.com>')
         msg = Message(
             subject='⚠️ Solicitud de Vendedor Rechazada - AgroMarket',
             recipients=[email],
+            sender=sender,
             html=html_body
         )
         
@@ -461,9 +465,11 @@ def api_enviar_correo_nueva_solicitud():
         '''
         
         # Crear y enviar el correo
+        sender = current_app.config.get('MAIL_DEFAULT_SENDER', 'AgroMarket <agromarket559@gmail.com>')
         msg = Message(
             subject=f'🔔 Nueva Solicitud de Vendedor - {nombre}',
             recipients=[admin_email],
+            sender=sender,
             html=html_body
         )
         
