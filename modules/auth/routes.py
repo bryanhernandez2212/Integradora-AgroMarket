@@ -586,32 +586,59 @@ def update_user_password(email, new_password):
     """
     try:
         print(f"\n🔐 Intentando actualizar contraseña para {email[:3]}***")
+        print(f"   FIREBASE_ADMIN_AVAILABLE: {FIREBASE_ADMIN_AVAILABLE}")
         
         # Intentar primero con Firebase Admin SDK si está disponible
         if FIREBASE_ADMIN_AVAILABLE:
+            print("🔍 Inicializando Firebase Admin SDK...")
             app = initialize_firebase_admin()
             if app:
                 print("✅ Firebase Admin SDK inicializado")
                 
                 # Obtener usuario por email
                 print(f"🔍 Buscando usuario por email: {email}")
-                user = get_user_by_email(email)
-                if user:
-                    print(f"✅ Usuario encontrado: {user.uid}")
-                    
-                    # Actualizar contraseña
-                    print("🔄 Actualizando contraseña en Firebase Auth...")
-                    firebase_auth.update_user(user.uid, password=new_password)
-                    print("✅ Contraseña actualizada exitosamente con Admin SDK")
-                    return True
-                else:
-                    print("⚠️ Usuario no encontrado con Admin SDK")
-        
-        # Si Admin SDK no está disponible, mostrar advertencia
-        print("⚠️ Firebase Admin SDK no disponible - el cambio de contraseña debe hacerse desde el frontend")
-        current_app.logger.warning("Firebase Admin SDK no disponible para cambio de contraseña")
-        return False
-        return update_user_password_via_rest_api(email, new_password)
+                try:
+                    user = get_user_by_email(email)
+                    if user:
+                        print(f"✅ Usuario encontrado: {user.uid}")
+                        
+                        # Actualizar contraseña
+                        print("🔄 Actualizando contraseña en Firebase Auth...")
+                        try:
+                            firebase_auth.update_user(user.uid, password=new_password)
+                            print("✅ Contraseña actualizada exitosamente con Admin SDK")
+                            current_app.logger.info(f"✅ Contraseña actualizada para {email}")
+                            return True
+                        except Exception as update_error:
+                            error_msg = f"Error al actualizar contraseña: {str(update_error)}"
+                            print(f"❌ {error_msg}")
+                            print(f"   Tipo: {type(update_error).__name__}")
+                            current_app.logger.error(error_msg)
+                            current_app.logger.error(f"Tipo de error: {type(update_error).__name__}")
+                            import traceback
+                            current_app.logger.error(traceback.format_exc())
+                            return False
+                    else:
+                        print("⚠️ Usuario no encontrado con Admin SDK")
+                        current_app.logger.warning(f"⚠️ Usuario no encontrado para {email}")
+                        return False
+                except Exception as user_error:
+                    error_msg = f"Error obteniendo usuario: {str(user_error)}"
+                    print(f"❌ {error_msg}")
+                    print(f"   Tipo: {type(user_error).__name__}")
+                    current_app.logger.error(error_msg)
+                    import traceback
+                    current_app.logger.error(traceback.format_exc())
+                    return False
+            else:
+                print("⚠️ Firebase Admin SDK no se pudo inicializar")
+                current_app.logger.warning("⚠️ Firebase Admin SDK no se pudo inicializar")
+                return False
+        else:
+            # Si Admin SDK no está disponible, mostrar advertencia
+            print("⚠️ Firebase Admin SDK no disponible - el cambio de contraseña debe hacerse desde el frontend")
+            current_app.logger.warning("Firebase Admin SDK no disponible para cambio de contraseña")
+            return False
         
     except Exception as e:
         error_msg = f"Error actualizando contraseña: {str(e)}"
@@ -619,10 +646,9 @@ def update_user_password(email, new_password):
         print(f"   Tipo: {type(e).__name__}")
         current_app.logger.error(error_msg)
         current_app.logger.error(f"Tipo de error: {type(e).__name__}")
-        
-        # Como último recurso, intentar REST API
-        print("🔄 Intentando como último recurso con REST API...")
-        return update_user_password_via_rest_api(email, new_password)
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        return False
 
 # =========================
 # Olvidé contraseña
@@ -1026,13 +1052,13 @@ def reset_password():
             # Validar longitud mínima
             if len(password) < 6:
                 flash('La contraseña debe tener al menos 6 caracteres.', 'danger')
-                return render_template('auth/reset_password.html', code=code)
+                return render_template('auth/reset_password.html', valid=True, email=email)
             
             # Detectar intentos de XSS (aunque las contraseñas no se muestran, es buena práctica)
             if detect_xss_attempt(password_raw) or detect_xss_attempt(password_confirm_raw):
                 log_security_event('xss_attempt', {'field': 'reset_password'})
                 flash('Se detectó contenido no permitido. Por favor, intenta nuevamente.', 'danger')
-                return render_template('auth/reset_password.html', code=code)
+                return render_template('auth/reset_password.html', valid=True, email=email)
         
         # Validar contraseñas
         if not password or len(password) < 6:
