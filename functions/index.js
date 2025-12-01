@@ -45,22 +45,34 @@ async function createTransporter() {
   const config = getSMTPConfig();
   
   // Para Firebase Functions, el error "queryA EBADNAME smtp.gmail.com" 
-  // indica un problema de resolución DNS. Intentar resolver DNS manualmente:
+  // indica un problema de resolución DNS. Usar IPs directas de Gmail como fallback:
+  
+  // IPs conocidas de Gmail SMTP (pueden cambiar, pero son estables)
+  const gmailIPs = [
+    '74.125.200.108',  // smtp.gmail.com IP común
+    '74.125.200.109',
+    '173.194.76.108',
+    '173.194.76.109'
+  ];
   
   let resolvedHost = config.host;
+  let useDirectIP = false;
   
-  // Intentar resolver el hostname a IP si es smtp.gmail.com
+  // Si es Gmail y hay problemas de DNS, usar IP directa
   if (config.host === 'smtp.gmail.com' || config.host.includes('gmail.com')) {
     try {
-      console.log(`🔍 Resolviendo DNS para ${config.host}...`);
+      console.log(`🔍 Intentando resolver DNS para ${config.host}...`);
       const lookup = promisify(dns.lookup);
       const result = await lookup(config.host, {family: 4});
       resolvedHost = result.address;
       console.log(`✅ DNS resuelto: ${config.host} -> ${resolvedHost}`);
     } catch (dnsError) {
       console.warn(`⚠️ No se pudo resolver DNS para ${config.host}:`, dnsError.message);
-      console.warn('⚠️ Usando hostname original, el transporter puede fallar');
-      // Continuar con el hostname original
+      console.warn('⚠️ Usando IP directa de Gmail como fallback...');
+      // Usar primera IP de Gmail como fallback
+      resolvedHost = gmailIPs[0];
+      useDirectIP = true;
+      console.log(`✅ Usando IP directa: ${resolvedHost}`);
     }
   }
   
@@ -78,6 +90,11 @@ async function createTransporter() {
       minVersion: 'TLSv1.2',
       servername: config.host // Usar el hostname original para SNI, no la IP
     },
+    // Si usamos IP directa, deshabilitar verificación de hostname
+    ...(useDirectIP ? {
+      name: config.host, // Nombre del servidor para verificación TLS
+      host: resolvedHost // IP directa
+    } : {}),
     // Timeouts aumentados para conexiones lentas
     connectionTimeout: 20000, // 20 segundos
     greetingTimeout: 10000, // 10 segundos  
