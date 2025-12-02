@@ -31,10 +31,20 @@ def get_firebase_functions_url(function_name):
         return url
     
     # Usar funciones de producción
-    # Para Firebase Functions v2 onCall, la URL debe incluir la región y el formato correcto
+    # Para Firebase Functions v2 onCall, cuando se llama vía HTTP directo,
+    # el formato de la URL es diferente. Necesitamos usar el formato correcto.
     region = 'us-central1'  # Región por defecto
-    # Formato para onCall v2: https://{region}-{project_id}.cloudfunctions.net/{function_name}
+    
+    # Para Firebase Functions v2 onCall vía HTTP directo, el formato es:
+    # https://{region}-{project_id}.cloudfunctions.net/{function_name}
+    # Pero también puede requerir el formato con el sufijo de la región
     url = f"https://{region}-{project_id}.cloudfunctions.net/{function_name}"
+    
+    # Logging para debugging
+    try:
+        current_app.logger.info(f"🔗 URL construida para {function_name}: {url}")
+    except RuntimeError:
+        print(f"🔗 URL construida para {function_name}: {url}")
     
     # Log para indicar si es desarrollo o producción
     try:
@@ -52,7 +62,7 @@ def get_firebase_functions_url(function_name):
     
     return url
 
-def call_firebase_function(function_name, data, id_token=None):
+def call_firebase_function(function_name, data, id_token=None, require_email=False):
     """
     Llamar a una Firebase Function desde Flask
     
@@ -60,6 +70,7 @@ def call_firebase_function(function_name, data, id_token=None):
         function_name: Nombre de la función (ej: 'sendPasswordResetCode')
         data: Datos a enviar a la función
         id_token: Token de autenticación (opcional para funciones públicas)
+        require_email: Si True, valida que el email esté presente (por defecto False)
     
     Returns:
         dict: Respuesta de la función
@@ -85,37 +96,24 @@ def call_firebase_function(function_name, data, id_token=None):
         'data': data
     }
     
-    # Verificar que el email esté presente en los datos antes de enviar
-    if 'email' not in data or not data.get('email'):
-        try:
-            current_app.logger.error("=" * 80)
-            current_app.logger.error("❌ ERROR CRÍTICO: Email no encontrado en data antes de enviar")
-            current_app.logger.error(f"   Keys en data: {list(data.keys())}")
-            current_app.logger.error(f"   Data completo: {json.dumps(data, indent=2, default=str)}")
-            current_app.logger.error("=" * 80)
-        except RuntimeError:
-            print("=" * 80)
-            print("❌ ERROR CRÍTICO: Email no encontrado en data antes de enviar")
-            print(f"   Keys en data: {list(data.keys())}")
-            print(f"   Data completo: {json.dumps(data, indent=2, default=str)}")
-            print("=" * 80)
-        return None
-    
-    # Verificar que el email en el payload también esté presente
-    if 'data' not in payload or 'email' not in payload['data'] or not payload['data'].get('email'):
-        try:
-            current_app.logger.error("=" * 80)
-            current_app.logger.error("❌ ERROR CRÍTICO: Email no encontrado en payload antes de enviar")
-            current_app.logger.error(f"   Payload keys: {list(payload.keys())}")
-            current_app.logger.error(f"   Payload data keys: {list(payload.get('data', {}).keys())}")
-            current_app.logger.error("=" * 80)
-        except RuntimeError:
-            print("=" * 80)
-            print("❌ ERROR CRÍTICO: Email no encontrado en payload antes de enviar")
-            print(f"   Payload keys: {list(payload.keys())}")
-            print(f"   Payload data keys: {list(payload.get('data', {}).keys())}")
-            print("=" * 80)
-        return None
+    # Validar email solo si es requerido
+    if require_email:
+        if 'email' not in data or not data.get('email'):
+            try:
+                current_app.logger.error("=" * 80)
+                current_app.logger.error("❌ ERROR CRÍTICO: Email no encontrado en data antes de enviar")
+                current_app.logger.error(f"   Función: {function_name}")
+                current_app.logger.error(f"   Keys en data: {list(data.keys())}")
+                current_app.logger.error(f"   Data completo: {json.dumps(data, indent=2, default=str)}")
+                current_app.logger.error("=" * 80)
+            except RuntimeError:
+                print("=" * 80)
+                print("❌ ERROR CRÍTICO: Email no encontrado en data antes de enviar")
+                print(f"   Función: {function_name}")
+                print(f"   Keys en data: {list(data.keys())}")
+                print(f"   Data completo: {json.dumps(data, indent=2, default=str)}")
+                print("=" * 80)
+            return None
     
     try:
         # Logging detallado para debugging en producción
@@ -175,6 +173,28 @@ def call_firebase_function(function_name, data, id_token=None):
                     print(f"   Keys en payload.data: {list(payload['data'].keys())}")
                 print(f"   Keys en data: {list(data.keys())}")
             print("=" * 80)
+        
+        # Para Firebase Functions v2 onCall, cuando se llama vía HTTP directo,
+        # el formato del body debe ser {"data": {...}} y se envía como JSON
+        # Además, puede requerir headers adicionales
+        try:
+            current_app.logger.info(f"🌐 Enviando POST a: {url}")
+            current_app.logger.info(f"   Headers: {headers}")
+            current_app.logger.info(f"   Payload type: {type(payload)}")
+        except RuntimeError:
+            print(f"🌐 Enviando POST a: {url}")
+            print(f"   Headers: {headers}")
+        
+        # Para Firebase Functions v2 onCall, cuando se llama vía HTTP directo,
+        # el formato puede requerir un método diferente. Intentamos primero con POST.
+        # Si obtenemos un 404, puede ser que la función no esté desplegada o que
+        # el formato de URL sea incorrecto.
+        try:
+            current_app.logger.info(f"🌐 Enviando POST a: {url}")
+            current_app.logger.info(f"   Headers: {headers}")
+        except RuntimeError:
+            print(f"🌐 Enviando POST a: {url}")
+            print(f"   Headers: {headers}")
         
         response = requests.post(
             url,
@@ -249,20 +269,43 @@ def call_firebase_function(function_name, data, id_token=None):
             return result
         else:
             # Para errores HTTP, intentar parsear el error
+            error_msg = f"Error HTTP {response.status_code}"
             try:
-                error_json = response.json()
-                error_msg = error_json.get('error', {}).get('message', response.text[:500])
+                # Intentar parsear como JSON
                 try:
-                    current_app.logger.error(f"❌ Error HTTP {response.status_code}: {error_msg}")
-                    current_app.logger.error(f"   Respuesta completa: {error_json}")
-                except RuntimeError:
-                    print(f"❌ Error HTTP {response.status_code}: {error_msg}")
-            except:
-                error_msg = f"Error llamando a {function_name}: {response.status_code} - {response.text[:500]}"
+                    error_json = response.json()
+                    error_msg = error_json.get('error', {}).get('message', response.text[:500]) if isinstance(error_json.get('error'), dict) else str(error_json.get('error', response.text[:500]))
+                except:
+                    error_msg = response.text[:500]
+                
                 try:
-                    current_app.logger.error(error_msg)
+                    current_app.logger.error("=" * 80)
+                    current_app.logger.error(f"❌ Error HTTP {response.status_code} llamando a {function_name}")
+                    current_app.logger.error(f"   URL: {url}")
+                    current_app.logger.error(f"   Error: {error_msg}")
+                    if response.status_code == 404:
+                        current_app.logger.error("   ⚠️  ERROR 404: La función no existe o no está desplegada")
+                        current_app.logger.error("   💡 SOLUCIÓN: Despliega las funciones con: firebase deploy --only functions")
+                        current_app.logger.error(f"   💡 Verifica que la función '{function_name}' esté exportada en functions/index.js")
+                    current_app.logger.error(f"   Response headers: {dict(response.headers)}")
+                    current_app.logger.error(f"   Response body: {response.text[:1000]}")
+                    current_app.logger.error("=" * 80)
                 except RuntimeError:
-                    print(error_msg)
+                    print("=" * 80)
+                    print(f"❌ Error HTTP {response.status_code} llamando a {function_name}")
+                    print(f"   URL: {url}")
+                    print(f"   Error: {error_msg}")
+                    if response.status_code == 404:
+                        print("   ⚠️  ERROR 404: La función no existe o no está desplegada")
+                        print("   💡 SOLUCIÓN: Despliega las funciones con: firebase deploy --only functions")
+                        print(f"   💡 Verifica que la función '{function_name}' esté exportada en functions/index.js")
+                    print(f"   Response body: {response.text[:500]}")
+                    print("=" * 80)
+            except Exception as e:
+                try:
+                    current_app.logger.error(f"❌ Error procesando respuesta HTTP: {str(e)}")
+                except RuntimeError:
+                    print(f"❌ Error procesando respuesta HTTP: {str(e)}")
             return None
     except requests.exceptions.Timeout:
         error_msg = f"⏱️  TIMEOUT: La función {function_name} tardó más de 60 segundos en responder"
@@ -331,7 +374,7 @@ def send_password_reset_code_via_functions(email, code, nombre=None):
         print(f"🔑 Código: {code[:2]}***")
         print(f"🔍 Llamando a Firebase Function: sendPasswordResetCode")
     
-    result = call_firebase_function('sendPasswordResetCode', data)
+    result = call_firebase_function('sendPasswordResetCode', data, require_email=True)
     
     try:
         current_app.logger.info(f"📥 Respuesta recibida de Firebase Functions")
@@ -473,7 +516,7 @@ def send_receipt_email_via_functions(email, nombre, compra_id, fecha_compra, pro
         print(f"📤 Payload keys: {list(data.keys())}")
         print(f"📤 Email en payload: {data.get('email', 'NO ENCONTRADO')}")
     
-    result = call_firebase_function('sendReceiptEmail', data)
+    result = call_firebase_function('sendReceiptEmail', data, require_email=True)
     
     try:
         current_app.logger.info(f"📥 Respuesta recibida de Firebase Functions")
@@ -623,7 +666,7 @@ def send_order_status_change_email_via_functions(email, nombre, compra_id, nuevo
         'fechaActualizacion': fecha_actualizacion
     }
     
-    result = call_firebase_function('sendOrderStatusChangeEmail', data)
+    result = call_firebase_function('sendOrderStatusChangeEmail', data, require_email=True)
     
     try:
         current_app.logger.info(f"📥 Respuesta recibida de Firebase Functions")
@@ -703,7 +746,7 @@ def send_seller_approval_email_via_functions(email, nombre, nombre_tienda=None, 
         'ubicacion': ubicacion or ''
     }
     
-    result = call_firebase_function('sendSellerApprovalEmail', data)
+    result = call_firebase_function('sendSellerApprovalEmail', data, require_email=True)
     
     try:
         current_app.logger.info(f"📥 Respuesta recibida de Firebase Functions: {result}")
@@ -771,7 +814,7 @@ def send_seller_rejection_email_via_functions(email, nombre, motivo_rechazo=''):
         'motivoRechazo': motivo_rechazo or 'No se proporcionó un motivo específico.'
     }
     
-    result = call_firebase_function('sendSellerRejectionEmail', data)
+    result = call_firebase_function('sendSellerRejectionEmail', data, require_email=True)
     
     try:
         current_app.logger.info(f"📥 Respuesta recibida de Firebase Functions: {result}")
@@ -846,4 +889,89 @@ def send_new_seller_application_notification_via_functions(solicitud_id, nombre,
         except RuntimeError:
             print(f"❌ Error enviando notificación de nueva solicitud")
         return False
+
+def update_password_via_functions(email, new_password, code_hash=None):
+    """
+    Actualizar contraseña de usuario usando Firebase Functions
+    
+    Args:
+        email: Email del usuario
+        new_password: Nueva contraseña
+        code_hash: Hash del código de verificación (opcional)
+    
+    Returns:
+        dict: Resultado de la operación con 'success' y 'message'
+    """
+    data = {
+        'email': email.strip().lower(),
+        'newPassword': new_password,
+    }
+    
+    if code_hash:
+        data['codeHash'] = code_hash
+    
+    try:
+        current_app.logger.info("=" * 80)
+        current_app.logger.info("🔐 INICIANDO ACTUALIZACIÓN DE CONTRASEÑA")
+        current_app.logger.info("=" * 80)
+        current_app.logger.info(f"📧 Email: {email}")
+        current_app.logger.info(f"🔍 Llamando a Firebase Function: updatePassword")
+    except RuntimeError:
+        print("=" * 80)
+        print("🔐 INICIANDO ACTUALIZACIÓN DE CONTRASEÑA")
+        print("=" * 80)
+        print(f"📧 Email: {email}")
+        print(f"🔍 Llamando a Firebase Function: updatePassword")
+    
+    result = call_firebase_function('updatePassword', data, require_email=True)
+    
+    if result and isinstance(result, dict):
+        if result.get('success'):
+            try:
+                current_app.logger.info("✅ Contraseña actualizada exitosamente con Firebase Functions")
+            except RuntimeError:
+                print("✅ Contraseña actualizada exitosamente con Firebase Functions")
+            return {
+                'success': True,
+                'message': result.get('message', 'Contraseña actualizada exitosamente')
+            }
+        else:
+            error_msg = result.get('message') or result.get('error') or 'Error desconocido'
+            try:
+                current_app.logger.error("=" * 80)
+                current_app.logger.error("❌ ERROR ACTUALIZANDO CONTRASEÑA")
+                current_app.logger.error(f"📧 Email: {email}")
+                current_app.logger.error(f"❌ Error: {error_msg}")
+                current_app.logger.error(f"   Resultado completo: {result}")
+                current_app.logger.error("=" * 80)
+            except RuntimeError:
+                print("=" * 80)
+                print("❌ ERROR ACTUALIZANDO CONTRASEÑA")
+                print(f"📧 Email: {email}")
+                print(f"❌ Error: {error_msg}")
+                print(f"   Resultado completo: {result}")
+                print("=" * 80)
+            return {
+                'success': False,
+                'message': error_msg
+            }
+    else:
+        try:
+            current_app.logger.error("=" * 80)
+            current_app.logger.error("❌ ERROR ACTUALIZANDO CONTRASEÑA")
+            current_app.logger.error(f"📧 Email: {email}")
+            current_app.logger.error("❌ Error: No se recibió respuesta de Firebase Functions")
+            current_app.logger.error(f"   Resultado completo: {result}")
+            current_app.logger.error("=" * 80)
+        except RuntimeError:
+            print("=" * 80)
+            print("❌ ERROR ACTUALIZANDO CONTRASEÑA")
+            print(f"📧 Email: {email}")
+            print("❌ Error: No se recibió respuesta de Firebase Functions")
+            print(f"   Resultado completo: {result}")
+            print("=" * 80)
+        return {
+            'success': False,
+            'message': 'No se recibió respuesta de Firebase Functions'
+        }
 

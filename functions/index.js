@@ -1305,3 +1305,106 @@ AgroMarket 🍃`;
   }
 );
 
+/**
+ * Actualizar contraseña de usuario
+ */
+exports.updatePassword = onCall(
+  {
+    cors: true, // Permitir CORS
+    invoker: 'public', // Permitir llamadas públicas (sin autenticación)
+  },
+  async (request) => {
+    try {
+      const { email, newPassword, codeHash } = request.data;
+      
+      if (!email || !newPassword) {
+        throw new HttpsError(
+          'invalid-argument',
+          'Email y nueva contraseña son requeridos'
+        );
+      }
+      
+      // Validar longitud mínima de contraseña
+      if (newPassword.length < 6) {
+        throw new HttpsError(
+          'invalid-argument',
+          'La contraseña debe tener al menos 6 caracteres'
+        );
+      }
+      
+      // Si se proporciona codeHash, verificar que el código esté usado
+      if (codeHash) {
+        const db = admin.firestore();
+        const codesRef = db.collection('password_reset_codes');
+        const snapshot = await codesRef
+          .where('email', '==', email.toLowerCase())
+          .where('code_hash', '==', codeHash)
+          .where('used', '==', false)
+          .limit(1)
+          .get();
+        
+        if (snapshot.empty) {
+          throw new HttpsError(
+            'permission-denied',
+            'Código de verificación inválido o ya usado'
+          );
+        }
+      }
+      
+      // Buscar usuario por email
+      let user;
+      try {
+        user = await admin.auth().getUserByEmail(email.toLowerCase().trim());
+      } catch (error) {
+        if (error.code === 'auth/user-not-found') {
+          throw new HttpsError(
+            'not-found',
+            'Usuario no encontrado'
+          );
+        }
+        throw error;
+      }
+      
+      // Actualizar contraseña
+      await admin.auth().updateUser(user.uid, {
+        password: newPassword
+      });
+      
+      // Marcar código como usado si se proporcionó
+      if (codeHash) {
+        const db = admin.firestore();
+        const codesRef = db.collection('password_reset_codes');
+        const snapshot = await codesRef
+          .where('email', '==', email.toLowerCase())
+          .where('code_hash', '==', codeHash)
+          .limit(1)
+          .get();
+        
+        if (!snapshot.empty) {
+          const codeDoc = snapshot.docs[0];
+          await codeDoc.ref.update({
+            used: true,
+            used_at: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
+      }
+      
+      console.log(`✅ Contraseña actualizada para usuario: ${email}`);
+      
+      return {
+        success: true,
+        message: 'Contraseña actualizada exitosamente'
+      };
+    } catch (error) {
+      console.error('Error actualizando contraseña:', error);
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      throw new HttpsError(
+        'internal',
+        'Error al actualizar contraseña: ' + error.message
+      );
+    }
+  }
+);
+
