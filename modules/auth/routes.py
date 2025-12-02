@@ -17,7 +17,11 @@ from utils.security import (
 # Importar utilidades para Firebase Functions
 FIREBASE_FUNCTIONS_AVAILABLE = False
 try:
-    from utils.firebase_functions import send_password_reset_code_via_functions, verify_password_reset_code_via_functions
+    from utils.firebase_functions import (
+        send_password_reset_code_via_functions, 
+        verify_password_reset_code_via_functions,
+        update_password_via_functions
+    )
     FIREBASE_FUNCTIONS_AVAILABLE = True
 except ImportError as e:
     # Se inicializará después cuando current_app esté disponible
@@ -1206,31 +1210,76 @@ def reset_password():
             flash("Las contraseñas no coinciden.", "danger")
             return render_template('auth/reset_password.html', valid=True, email=email)
         
-        # Intentar actualizar la contraseña en Firebase Auth
+        # Intentar actualizar la contraseña usando Firebase Functions
         # Normalizar email antes de buscar (Firebase Auth guarda emails en minúsculas)
         email_normalized = email.lower().strip()
         print(f"🔄 Intentando actualizar contraseña para: {email_normalized}")
         print(f"   Email original de sesión: {email}")
         
-        # Verificar si Firebase Admin SDK está disponible y tiene credenciales
+        # Intentar primero con Firebase Functions (más confiable)
+        if FIREBASE_FUNCTIONS_AVAILABLE:
+            try:
+                print("🔍 Intentando actualizar contraseña con Firebase Functions...")
+                result = update_password_via_functions(email_normalized, password, code_hash)
+                
+                if result and result.get('success'):
+                    print("✅ Contraseña actualizada exitosamente con Firebase Functions")
+                    
+                    # Limpiar sesión
+                    session.pop('reset_password_email', None)
+                    session.pop('reset_password_verified', None)
+                    session.pop('reset_password_code_hash', None)
+                    session.pop('reset_password_code', None)
+                    session.pop('reset_password_code_expires', None)
+                    
+                    print("✅ Sesión limpiada")
+                    print("=" * 60 + "\n")
+                    
+                    if request.is_json:
+                        return jsonify({
+                            'success': True,
+                            'message': 'Contraseña actualizada exitosamente.'
+                        })
+                    
+                    flash("Tu contraseña ha sido restablecida exitosamente. Ahora puedes iniciar sesión con tu nueva contraseña.", "success")
+                    return redirect(url_for('auth.login'))
+                else:
+                    error_msg = result.get('message', 'No se pudo actualizar la contraseña') if result else 'No se recibió respuesta de Firebase Functions'
+                    print(f"❌ Error con Firebase Functions: {error_msg}")
+                    print("=" * 60 + "\n")
+                    
+                    if request.is_json:
+                        return jsonify({
+                            'success': False,
+                            'message': error_msg
+                        }), 400
+                    
+                    flash(f"❌ Error al restablecer la contraseña: {error_msg}", "danger")
+                    return render_template('auth/reset_password.html', valid=True, email=email)
+            except Exception as e:
+                print(f"❌ Excepción al usar Firebase Functions: {str(e)}")
+                current_app.logger.error(f"Error usando Firebase Functions para actualizar contraseña: {str(e)}")
+                # Continuar con el método alternativo
+        
+        # Método alternativo: Intentar con Firebase Admin SDK
+        print("🔍 Intentando actualizar contraseña con Firebase Admin SDK...")
         app = initialize_firebase_admin()
         if not app:
-            # Si no hay credenciales, mostrar mensaje claro al usuario
-            error_msg = "El servidor no tiene configuradas las credenciales de Firebase Admin SDK. Por favor, contacta al administrador para configurar el archivo serviceAccountKey.json en el servidor."
+            error_msg = "El servidor no tiene configuradas las credenciales de Firebase. Por favor, contacta al administrador."
             print(f"❌ {error_msg}")
             current_app.logger.error(error_msg)
             
             if request.is_json:
                 return jsonify({
                     'success': False,
-                    'message': 'El servidor necesita configuración adicional. Por favor, contacta al administrador para configurar Firebase Admin SDK.'
+                    'message': 'El servidor necesita configuración adicional. Por favor, contacta al administrador.'
                 }), 400
             
             flash("El servidor necesita configuración adicional para cambiar contraseñas. Por favor, contacta al administrador.", "danger")
             return render_template('auth/reset_password.html', valid=True, email=email)
         
         if update_user_password(email_normalized, password):
-            print("✅ Contraseña actualizada exitosamente")
+            print("✅ Contraseña actualizada exitosamente con Admin SDK")
             
             # Marcar código como usado si está disponible
             if code_hash:
