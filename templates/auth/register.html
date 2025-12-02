@@ -101,16 +101,14 @@
                         </small>
                     </div>
 
-                    <!-- Ubicación con Google Maps Autocomplete -->
+                    <!-- Ubicación - Selector de ciudades -->
                     <div class="input-group">
-                        <label for="ubicacion">Ubicación</label>
-                        <input type="text" name="ubicacion" id="ubicacion" placeholder="Empieza a escribir tu dirección..." maxlength="200" autocomplete="off">
+                        <label for="ubicacion">Ciudad</label>
+                        <input type="text" name="ubicacion" id="ubicacion" placeholder="Selecciona tu ciudad..." maxlength="200" autocomplete="off" required>
                         <small>
                             <i class="fas fa-map-marker-alt"></i> 
-                            ¿Dónde vendes tus productos? (Autocompletado con Google Maps)
+                            ¿En qué ciudad vendes tus productos? (Solo ciudades permitidas)
                         </small>
-                        <input type="hidden" id="ubicacion_lat" name="ubicacion_lat">
-                        <input type="hidden" id="ubicacion_lng" name="ubicacion_lng">
                         <input type="hidden" id="ubicacion_formatted" name="ubicacion_formatted">
                     </div>
 
@@ -145,8 +143,9 @@
         </div>
     </div>
 
-    <!-- Google Maps Places API -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCCm9SIv6WBmkejLHJ4X7WaTm8xf6DBpCo&libraries=places&language=es&region=MX" async defer></script>
+    <!-- Configuración de envío y selector de ciudades -->
+    <script src="/static/js/shipping-config.js"></script>
+    <script src="/static/js/city-selector.js"></script>
     
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -494,10 +493,14 @@
                             }
                         }
 
-                        // Agregar coordenadas si están disponibles
-                        const ubicacionLat = document.getElementById('ubicacion_lat')?.value;
-                        const ubicacionLng = document.getElementById('ubicacion_lng')?.value;
-                        const ubicacionFormatted = document.getElementById('ubicacion_formatted')?.value;
+                        // Obtener ciudad seleccionada
+                        const ubicacionFormatted = document.getElementById('ubicacion_formatted')?.value || ubicacion;
+                        
+                        // Validar que la ciudad esté en la lista permitida
+                        if (!window.SHIPPING_CONFIG || !window.SHIPPING_CONFIG.isValidCity(ubicacion)) {
+                            alert('Por favor, selecciona una ciudad válida de la lista.');
+                            return;
+                        }
 
                         // Crear solicitud en colección separada (NO crear usuario todavía)
                         const solicitudData = {
@@ -505,10 +508,9 @@
                             nombre,
                             email,
                             nombre_tienda: nombreTienda,
-                            ubicacion: ubicacion,
-                            ubicacion_formatted: ubicacionFormatted || ubicacion,
-                            ubicacion_lat: ubicacionLat ? parseFloat(ubicacionLat) : null,
-                            ubicacion_lng: ubicacionLng ? parseFloat(ubicacionLng) : null,
+                            ubicacion: ubicacion, // Ciudad seleccionada
+                            ubicacion_formatted: ubicacionFormatted,
+                            ciudad: ubicacion, // Guardar también como ciudad para facilitar búsquedas
                             documento_url: documentoUrl,
                             estado: 'pendiente', // pendiente, aprobada, rechazada
                             fecha_solicitud: firebase.firestore.FieldValue.serverTimestamp(),
@@ -673,41 +675,35 @@
         const ubicacionInput = document.getElementById('ubicacion');
         
         // Inicializar Google Places Autocomplete
-        let autocomplete = null;
+        // Inicializar selector de ciudades para vendedores
+        let citySelector = null;
         
-        function initGooglePlaces() {
-            if (typeof google !== 'undefined' && google.maps && google.maps.places) {
-                const ubicacionInput = document.getElementById('ubicacion');
-                if (ubicacionInput) {
-                    autocomplete = new google.maps.places.Autocomplete(ubicacionInput, {
-                        componentRestrictions: { country: 'mx' }, // Restringir a México
-                        fields: ['formatted_address', 'geometry', 'name'],
-                        types: ['establishment', 'geocode']
-                    });
-
-                    autocomplete.addListener('place_changed', function() {
-                        const place = autocomplete.getPlace();
-                        if (!place.geometry) {
-                            console.log('No se encontró información del lugar');
-                            return;
-                        }
-
-                        // Guardar datos del lugar
-                        document.getElementById('ubicacion_formatted').value = place.formatted_address || '';
-                        document.getElementById('ubicacion_lat').value = place.geometry.location.lat();
-                        document.getElementById('ubicacion_lng').value = place.geometry.location.lng();
-                    });
-                }
+        function initCitySelector() {
+            const ubicacionInput = document.getElementById('ubicacion');
+            if (ubicacionInput && typeof window.initCitySelector !== 'undefined') {
+                citySelector = new window.CitySelector('ubicacion', {
+                    formattedId: 'ubicacion_formatted'
+                });
+                
+                // Event listener para cuando se seleccione una ciudad
+                ubicacionInput.addEventListener('citySelected', function(e) {
+                    const city = e.detail.city;
+                    const formattedInput = document.getElementById('ubicacion_formatted');
+                    if (formattedInput) {
+                        formattedInput.value = city;
+                    }
+                    console.log('Ciudad seleccionada:', city);
+                });
             }
         }
 
-        // Esperar a que Google Maps se cargue
+        // Esperar a que los scripts se carguen
         window.addEventListener('load', function() {
-            if (typeof google !== 'undefined' && google.maps && google.maps.places) {
-                initGooglePlaces();
+            if (typeof window.SHIPPING_CONFIG !== 'undefined' && typeof window.CitySelector !== 'undefined') {
+                initCitySelector();
             } else {
                 // Reintentar después de un momento
-                setTimeout(initGooglePlaces, 1000);
+                setTimeout(initCitySelector, 500);
             }
         });
 
@@ -754,8 +750,8 @@
                     if (nombreTiendaInput) nombreTiendaInput.required = true;
                     if (ubicacionInput) ubicacionInput.required = true;
                     if (documentoInput) documentoInput.required = true;
-                    // Reinicializar autocomplete cuando se muestren los campos
-                    setTimeout(initGooglePlaces, 100);
+                    // Reinicializar selector de ciudades cuando se muestren los campos
+                    setTimeout(initCitySelector, 100);
                 } else {
                     vendedorFields.style.display = 'none';
                     // Quitar requerido si no es vendedor
@@ -766,9 +762,10 @@
                     if (ubicacionInput) {
                         ubicacionInput.required = false;
                         ubicacionInput.value = '';
-                        document.getElementById('ubicacion_lat').value = '';
-                        document.getElementById('ubicacion_lng').value = '';
-                        document.getElementById('ubicacion_formatted').value = '';
+                        const ubicacionFormattedInput = document.getElementById('ubicacion_formatted');
+                        if (ubicacionFormattedInput) {
+                            ubicacionFormattedInput.value = '';
+                        }
                     }
                     if (documentoInput) {
                         documentoInput.required = false;

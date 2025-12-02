@@ -176,15 +176,33 @@
                             <label for="ciudad">Ciudad de entrega</label>
                             <select id="ciudad" name="ciudad" required>
                                 <option value="">Selecciona una ciudad</option>
-                                <option value="Ocosingo">Ocosingo</option>
-                                <option value="San Cristóbal de las Casas">San Cristóbal de las Casas</option>
-                                <option value="Comitán de Domínguez">Comitán de Domínguez</option>
-                                <option value="Tuxtla Gutiérrez">Tuxtla Gutiérrez</option>
-                                <option value="Yajalón">Yajalón</option>
-                                <option value="Bachajón">Bachajón</option>
-                                <option value="Palenque">Palenque</option>
+                                <!-- Las opciones se llenarán dinámicamente desde SHIPPING_CONFIG -->
                             </select>
+                            <small class="form-text">Selecciona tu ciudad para calcular el costo de envío</small>
                         </div>
+                        <script>
+                            // Llenar selector de ciudades cuando se cargue la página
+                            document.addEventListener('DOMContentLoaded', function() {
+                                if (window.SHIPPING_CONFIG) {
+                                    const select = document.getElementById('ciudad');
+                                    if (select) {
+                                        window.SHIPPING_CONFIG.cities.forEach(ciudad => {
+                                            const option = document.createElement('option');
+                                            option.value = ciudad;
+                                            option.textContent = ciudad;
+                                            select.appendChild(option);
+                                        });
+                                        
+                                        // Event listener para recalcular envío
+                                        select.addEventListener('change', function() {
+                                            if (typeof calcularEnvio === 'function') {
+                                                calcularEnvio();
+                                            }
+                                        });
+                                    }
+                                }
+                            });
+                        </script>
                         <div class="form-group">
                             <label for="telefono">Número de teléfono</label>
                             <input type="tel" id="telefono" name="telefono" placeholder="Ej: 9611234567" pattern="[0-9]{10}" maxlength="10" required>
@@ -301,6 +319,10 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-messaging.js"></script>
     <script src="/static/js/firebase-config.js"></script>
     <script src="/static/js/firebase-notifications.js"></script>
+    
+    <!-- Configuración de envío y selector de ciudades -->
+    <script src="/static/js/shipping-config.js"></script>
+    <script src="/static/js/city-selector.js"></script>
 
     <script>
         // Render dinámico del carrito desde Firestore
@@ -418,7 +440,104 @@
             }
 
             const subtotal = carritoItems.reduce((acc, it) => acc + (Number(it.precio) * Number(it.cantidad)), 0);
-            const envio = 4.50;
+            
+            // Calcular envío dinámicamente (se actualizará cuando se seleccione la ciudad)
+            let envio = 0;
+            let envioCalculado = false;
+            
+            // Función para calcular envío (disponible globalmente)
+            window.calcularEnvio = async function calcularEnvio() {
+                const ciudadComprador = document.getElementById('ciudad_din')?.value || 
+                                       document.getElementById('ciudad')?.value;
+                
+                if (!ciudadComprador || !window.SHIPPING_CONFIG) {
+                    envio = 0;
+                    actualizarTotal();
+                    return;
+                }
+                
+                // Obtener ciudades de vendedores y pesos de productos
+                const vendedoresCiudades = new Map(); // Map<vendedor_id, ciudad>
+                let pesoTotal = 0;
+                
+                for (const item of carritoItems) {
+                    // Obtener peso (asumiendo que está en kg, si no, usar cantidad como aproximación)
+                    const peso = item.peso || item.cantidad || 1; // kg
+                    pesoTotal += peso;
+                    
+                    // Obtener ciudad del vendedor
+                    if (item.vendedor_id && !vendedoresCiudades.has(item.vendedor_id)) {
+                        try {
+                            const vendedorDoc = await db.collection('usuarios').doc(item.vendedor_id).get();
+                            if (vendedorDoc.exists) {
+                                const vendedorData = vendedorDoc.data();
+                                const ciudadVendedor = vendedorData.ciudad || 
+                                                      vendedorData.ubicacion || 
+                                                      vendedorData.ubicacion_formatted;
+                                if (ciudadVendedor) {
+                                    vendedoresCiudades.set(item.vendedor_id, ciudadVendedor);
+                                }
+                            }
+                        } catch (error) {
+                            console.error('Error obteniendo ciudad del vendedor:', error);
+                        }
+                    }
+                }
+                
+                // Calcular envío para cada vendedor y sumar
+                let envioTotal = 0;
+                for (const [vendedorId, ciudadVendedor] of vendedoresCiudades) {
+                    // Calcular peso de productos de este vendedor
+                    let pesoVendedor = 0;
+                    for (const item of carritoItems) {
+                        if (item.vendedor_id === vendedorId) {
+                            pesoVendedor += item.peso || item.cantidad || 1;
+                        }
+                    }
+                    
+                    const costoEnvio = window.SHIPPING_CONFIG.calculateShippingCost(
+                        ciudadVendedor, 
+                        ciudadComprador, 
+                        pesoVendedor
+                    );
+                    
+                    if (costoEnvio !== null) {
+                        envioTotal += costoEnvio;
+                    } else {
+                        console.warn(`No se pudo calcular envío de ${ciudadVendedor} a ${ciudadComprador}`);
+                        // Usar envío por defecto si no se puede calcular
+                        envioTotal += 4.50;
+                    }
+                }
+                
+                // Si no hay vendedores con ciudad, usar envío por defecto
+                if (vendedoresCiudades.size === 0) {
+                    envioTotal = 4.50;
+                }
+                
+                envio = envioTotal;
+                envioCalculado = true;
+                actualizarTotal();
+            };
+            
+            // Función para actualizar el total
+            window.actualizarTotal = function actualizarTotal() {
+                const impuestos = subtotal * 0.1;
+                const total = subtotal + envio + impuestos;
+                
+                // Actualizar UI
+                const envioEl = document.getElementById('envio-din');
+                const impuestosEl = document.getElementById('impuestos-din');
+                const totalEl = document.getElementById('total-din');
+                
+                if (envioEl) envioEl.textContent = currency(envio);
+                if (impuestosEl) impuestosEl.textContent = currency(impuestos);
+                if (totalEl) totalEl.textContent = currency(total);
+                
+                // Actualizar variable global
+                totalCarritoDin = total;
+            };
+            
             const impuestos = subtotal * 0.1;
             const total = subtotal + envio + impuestos;
 
@@ -447,14 +566,9 @@
                             <label for="ciudad_din">Ciudad de entrega</label>
                             <select id="ciudad_din" name="ciudad_din" required>
                                 <option value="">Selecciona una ciudad</option>
-                                <option value="Ocosingo">Ocosingo</option>
-                                <option value="San Cristóbal de las Casas">San Cristóbal de las Casas</option>
-                                <option value="Comitán de Domínguez">Comitán de Domínguez</option>
-                                <option value="Tuxtla Gutiérrez">Tuxtla Gutiérrez</option>
-                                <option value="Yajalón">Yajalón</option>
-                                <option value="Bachajón">Bachajón</option>
-                                <option value="Palenque">Palenque</option>
+                                <!-- Las opciones se llenarán dinámicamente desde SHIPPING_CONFIG -->
                             </select>
+                            <small class="form-text">Selecciona tu ciudad para calcular el costo de envío</small>
                         </div>
                         <div class="form-group">
                             <label for="telefono_din">Número de teléfono</label>
@@ -574,8 +688,59 @@
             // Configurar listeners para métodos de pago dinámicos
             setTimeout(() => {
                 configurarMetodosPagoDin(total);
+                
+                // Llenar selectores de ciudades dinámicamente
+                llenarSelectoresCiudades();
+                
+                // Agregar event listeners para recalcular envío cuando cambie la ciudad
+                const ciudadSelectDin = document.getElementById('ciudad_din');
+                const ciudadSelect = document.getElementById('ciudad');
+                
+                if (ciudadSelectDin) {
+                    ciudadSelectDin.addEventListener('change', () => {
+                        calcularEnvio();
+                    });
+                }
+                
+                if (ciudadSelect) {
+                    ciudadSelect.addEventListener('change', () => {
+                        calcularEnvio();
+                    });
+                }
+                
                 // Formulario de dirección manual - sin Google Maps
             }, 100);
+            
+            // Función para llenar selectores de ciudades
+            function llenarSelectoresCiudades() {
+                if (!window.SHIPPING_CONFIG) {
+                    console.warn('SHIPPING_CONFIG no está disponible');
+                    return;
+                }
+                
+                const ciudades = window.SHIPPING_CONFIG.cities;
+                const selectores = [
+                    document.getElementById('ciudad_din'),
+                    document.getElementById('ciudad')
+                ];
+                
+                selectores.forEach(select => {
+                    if (!select) return;
+                    
+                    // Limpiar opciones existentes (excepto la primera)
+                    while (select.options.length > 1) {
+                        select.remove(1);
+                    }
+                    
+                    // Agregar ciudades
+                    ciudades.forEach(ciudad => {
+                        const option = document.createElement('option');
+                        option.value = ciudad;
+                        option.textContent = ciudad;
+                        select.appendChild(option);
+                    });
+                });
+            }
 
             // Render de items
             const lista = izquierda.querySelector('#lista-carrito-din');
@@ -699,6 +864,12 @@
             
             if (!cardNumberContainer || !cardExpiryContainer || !cardCvcContainer) {
                 console.error('Contenedores de Stripe no encontrados');
+                return;
+            }
+
+            // Evitar crear múltiples elementos de tipo cardNumber/cardExpiry/cardCvc
+            if (window.cardNumberElementDin || window.cardExpiryElementDin || window.cardCvcElementDin) {
+                console.warn('Stripe Din ya está inicializado, no se crearán nuevos elementos.');
                 return;
             }
 
