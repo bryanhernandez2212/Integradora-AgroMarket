@@ -400,11 +400,41 @@ async function eliminarUsuario(userId, nombre) {
 
 function cerrarSesion() {
     if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
-        auth.signOut().then(() => {
-            window.location.href = '/auth/login';
-        }).catch(error => {
-            console.error('Error al cerrar sesión:', error);
-        });
+        // Usar función centralizada si está disponible, sino usar la lógica local
+        if (window.cerrarSesionCompleto) {
+            window.cerrarSesionCompleto();
+        } else if (window.handleLogout) {
+            window.handleLogout();
+        } else {
+            // Limpiar almacenamiento local
+            const keysToRemove = ['firebase_uid', 'firebase_email', 'user_roles', 'user_rol_activo', 'user_nombre', 'carrito', 'totalAmount', 'paymentIntentId', 'paymentDate', 'paymentMethod'];
+            keysToRemove.forEach(key => {
+                localStorage.removeItem(key);
+                sessionStorage.removeItem(key);
+            });
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('stripe_') || key.startsWith('STRIPE_')) {
+                    localStorage.removeItem(key);
+                }
+            });
+            Object.keys(sessionStorage).forEach(key => {
+                if (key.startsWith('stripe_') || key.startsWith('STRIPE_')) {
+                    sessionStorage.removeItem(key);
+                }
+            });
+            
+            // Cerrar sesión en Firebase
+            if (auth) {
+                auth.signOut().then(() => {
+                    window.location.href = '/auth/login';
+                }).catch(error => {
+                    console.error('Error al cerrar sesión:', error);
+                    window.location.href = '/auth/login';
+                });
+            } else {
+                window.location.href = '/auth/login';
+            }
+        }
     }
 }
 

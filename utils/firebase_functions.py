@@ -306,7 +306,7 @@ def call_firebase_function(function_name, data, id_token=None, require_email=Fal
                     current_app.logger.error(f"❌ Error procesando respuesta HTTP: {str(e)}")
                 except RuntimeError:
                     print(f"❌ Error procesando respuesta HTTP: {str(e)}")
-            return None
+                return None
     except requests.exceptions.Timeout:
         error_msg = f"⏱️  TIMEOUT: La función {function_name} tardó más de 60 segundos en responder"
         try:

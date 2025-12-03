@@ -320,14 +320,77 @@ async function handleRegister(nombre, email, password, rol) {
     }
 }
 
+// Función para limpiar todo el almacenamiento local
+function limpiarAlmacenamientoLocal() {
+    try {
+        // Limpiar datos de Firebase Auth
+        const keysToRemove = [
+            'firebase_uid',
+            'firebase_email',
+            'user_roles',
+            'user_rol_activo',
+            'user_nombre',
+            'carrito',
+            'totalAmount',
+            'paymentIntentId',
+            'paymentDate',
+            'paymentMethod'
+        ];
+        
+        // Limpiar localStorage
+        keysToRemove.forEach(key => {
+            localStorage.removeItem(key);
+        });
+        
+        // Limpiar sessionStorage
+        keysToRemove.forEach(key => {
+            sessionStorage.removeItem(key);
+        });
+        
+        // Limpiar todas las claves relacionadas con Stripe
+        const allKeys = Object.keys(localStorage);
+        allKeys.forEach(key => {
+            if (key.startsWith('stripe_') || key.startsWith('STRIPE_')) {
+                localStorage.removeItem(key);
+            }
+        });
+        
+        const allSessionKeys = Object.keys(sessionStorage);
+        allSessionKeys.forEach(key => {
+            if (key.startsWith('stripe_') || key.startsWith('STRIPE_')) {
+                sessionStorage.removeItem(key);
+            }
+        });
+        
+        console.log('✅ Almacenamiento local limpiado');
+    } catch (error) {
+        console.error('⚠️ Error limpiando almacenamiento:', error);
+    }
+}
+
 // Función para cerrar sesión
 async function handleLogout() {
     try {
-        await auth.signOut();
-        window.location.href = '/';
+        // Limpiar almacenamiento primero
+        limpiarAlmacenamientoLocal();
+        
+        // Cerrar sesión en Firebase si está disponible
+        if (auth) {
+            try {
+                await auth.signOut();
+                console.log('✅ Sesión de Firebase cerrada');
+            } catch (firebaseError) {
+                console.warn('⚠️ Error cerrando sesión en Firebase (puede que no esté autenticado):', firebaseError);
+            }
+        }
+        
+        // Redirigir al login
+        window.location.href = '/auth/login';
     } catch (error) {
         console.error('Error al cerrar sesión:', error);
-        showMessage('Error al cerrar sesión', 'error');
+        // Aún así limpiar y redirigir
+        limpiarAlmacenamientoLocal();
+        window.location.href = '/auth/login';
     }
 }
 
@@ -357,6 +420,15 @@ async function handleForgotPassword(email) {
 }
 
 // Exportar funciones para uso global
+// Exponer funciones globalmente para uso en otras páginas
+window.limpiarAlmacenamientoLocal = limpiarAlmacenamientoLocal;
+window.handleLogout = handleLogout;
+
+// Función global de logout que puede ser llamada desde cualquier página
+window.cerrarSesionCompleto = async function() {
+    await handleLogout();
+};
+
 window.firebaseAuth = {
     handleLogin,
     handleRegister,

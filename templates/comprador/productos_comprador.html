@@ -309,6 +309,8 @@
     
     <!-- Firebase Config -->
     <script src="/static/js/firebase-config.js"></script>
+    <!-- Protección contra acceso después de logout -->
+    <script src="{{ url_for('static', filename='js/auth-protection.js') }}"></script>
     
     <script src="{{ url_for('static', filename='js/productos-comprador.js') }}"></script>
 </body>

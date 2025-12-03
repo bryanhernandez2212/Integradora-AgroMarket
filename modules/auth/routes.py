@@ -164,14 +164,72 @@ def sincronizar_rol():
         return jsonify({'error': 'Error al sincronizar rol: ' + str(e)}), 500
 
 # ---------------------
+# Verificar Sesión (para JavaScript)
+# ---------------------
+@auth_bp.route("/verificar-sesion")
+def verificar_sesion():
+    """Endpoint para verificar si hay una sesión activa (usado por JavaScript)"""
+    if "usuario_id" in session:
+        return jsonify({"authenticated": True, "usuario_id": session.get("usuario_id")}), 200
+    else:
+        return jsonify({"authenticated": False}), 401
+
+# ---------------------
 # Logout
 # ---------------------
 @auth_bp.route("/logout")
 def logout():
-    """Logout - Firebase maneja la autenticación en el frontend"""
+    """Logout - Limpia sesión del servidor y redirige inmediatamente"""
     session.clear()
-    flash("Sesión cerrada correctamente", "success")
-    return redirect(url_for("auth.login"))
+    # Devolver una página HTML simple que limpia y redirige rápidamente
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="refresh" content="0;url=/auth/login">
+        <title>Cerrando sesión...</title>
+    </head>
+    <body>
+        <p>Cerrando sesión...</p>
+        <script>
+            // Limpiar todo el almacenamiento inmediatamente
+            (function() {
+                try {
+                    // Limpiar localStorage
+                    const keysToRemove = [
+                        'firebase_uid', 'firebase_email', 'user_roles', 
+                        'user_rol_activo', 'user_nombre', 'carrito',
+                        'totalAmount', 'paymentIntentId', 'paymentDate', 'paymentMethod'
+                    ];
+                    
+                    keysToRemove.forEach(key => {
+                        localStorage.removeItem(key);
+                        sessionStorage.removeItem(key);
+                    });
+                    
+                    // Limpiar claves de Stripe
+                    Object.keys(localStorage).forEach(key => {
+                        if (key.startsWith('stripe_') || key.startsWith('STRIPE_')) {
+                            localStorage.removeItem(key);
+                        }
+                    });
+                    Object.keys(sessionStorage).forEach(key => {
+                        if (key.startsWith('stripe_') || key.startsWith('STRIPE_')) {
+                            sessionStorage.removeItem(key);
+                        }
+                    });
+                } catch (e) {
+                    console.error('Error limpiando:', e);
+                }
+                
+                // Redirigir inmediatamente (sin esperar Firebase)
+                window.location.replace('/auth/login');
+            })();
+        </script>
+    </body>
+    </html>
+    """
 
 # ---------------------
 # Perfil
