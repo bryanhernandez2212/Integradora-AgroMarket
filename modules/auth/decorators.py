@@ -1,5 +1,5 @@
 from functools import wraps
-from flask import session, redirect, url_for, flash
+from flask import session, redirect, url_for, flash, make_response
 
 def login_required(f):
     @wraps(f)
@@ -12,7 +12,13 @@ def login_required(f):
                 return jsonify({'error': 'Debes iniciar sesión para acceder a esta página.'}), 401
             flash("Debes iniciar sesión para acceder a esta página.", "danger")
             return redirect(url_for("auth.login"))
-        return f(*args, **kwargs)
+        
+        # Agregar headers para prevenir cacheo del navegador
+        response = make_response(f(*args, **kwargs))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
     return wrapped
 
 def role_required(rol):
@@ -66,6 +72,11 @@ def role_required(rol):
                 flash("No tienes permisos para acceder a esta página.", "danger")
                 return redirect(url_for("auth.login"))
 
-            return f(*args, **kwargs)
+            # Agregar headers para prevenir cacheo del navegador
+            response = make_response(f(*args, **kwargs))
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response
         return wrapped
     return decorator

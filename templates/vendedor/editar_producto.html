@@ -206,6 +206,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 
 <script src="/static/js/firebase-instant.js"></script>
+<!-- Protección contra acceso después de logout -->
+<script src="{{ url_for('static', filename='js/auth-protection.js') }}"></script>
 <script src="{{ url_for('static', filename='js/productos-common.js') }}"></script>
 <script src="{{ url_for('static', filename='js/security-validation.js') }}"></script>
 <script src="{{ url_for('static', filename='js/productos-editar.js') }}"></script>

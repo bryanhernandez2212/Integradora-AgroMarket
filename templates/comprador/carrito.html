@@ -319,6 +319,8 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-messaging.js"></script>
     <script src="/static/js/firebase-config.js"></script>
     <script src="/static/js/firebase-notifications.js"></script>
+    <!-- Protección contra acceso después de logout -->
+    <script src="{{ url_for('static', filename='js/auth-protection.js') }}"></script>
     
     <!-- Configuración de envío y selector de ciudades -->
     <script src="/static/js/shipping-config.js"></script>

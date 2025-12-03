@@ -210,10 +210,10 @@
 <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore-compat.js"></script>
-
+<!-- Configuración de Firebase -->
 <script>
     // Configuración de Firebase
-    const firebaseConfig = {
+    window.firebaseConfig = {
         apiKey: "AIzaSyDZWmY0ggZthOKv17yHH57pkXsie_U2YnI",
         authDomain: "agromarket-625b2.firebaseapp.com",
         projectId: "agromarket-625b2",
@@ -222,9 +222,13 @@
         appId: "1:18163605615:web:6910d608e280b028d6ad9a",
         measurementId: "G-CVL9DRNMG1"
     };
+</script>
+<!-- Protección contra acceso después de logout - DEBE cargarse ANTES de inicializar Firebase -->
+<script src="{{ url_for('static', filename='js/auth-protection.js') }}"></script>
 
+<script>
     // Inicializar Firebase
-    firebase.initializeApp(firebaseConfig);
+    firebase.initializeApp(window.firebaseConfig);
     const auth = firebase.auth();
 
     // Verificar autenticación
@@ -236,27 +240,67 @@
             if (saludoElement) {
                 saludoElement.textContent = user.displayName || user.email;
             }
+        } else {
+            // Si no hay usuario, verificar también la sesión del servidor
+            console.log('⚠️ No hay usuario en Firebase, verificando sesión del servidor...');
+            fetch('/auth/verificar-sesion', {
+                method: 'GET',
+                credentials: 'same-origin'
+            }).then(response => {
+                if (!response.ok || response.status === 401) {
+                    console.log('🔒 Sesión del servidor también inválida, redirigiendo...');
+                    window.location.replace('/auth/login');
+                }
+            }).catch(error => {
+                console.error('Error verificando sesión:', error);
+                // En caso de error, redirigir por seguridad
+                window.location.replace('/auth/login');
+            });
         }
     });
 
     // Función para cerrar sesión
     function cerrarSesion() {
         if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
-            // Usar Firebase si está disponible
-            if (window.initializeFirebaseInstant) {
-                window.initializeFirebaseInstant().then(({ auth }) => {
-                    auth.signOut().then(() => {
-                        console.log('✅ Sesión cerrada correctamente');
-                        window.location.href = '/auth/login';
-                    }).catch((error) => {
-                        console.error('❌ Error al cerrar sesión:', error);
+            // Usar función centralizada si está disponible
+            if (window.cerrarSesionCompleto) {
+                window.cerrarSesionCompleto();
+            } else if (window.handleLogout) {
+                window.handleLogout();
+            } else {
+                // Limpiar almacenamiento local
+                const keysToRemove = ['firebase_uid', 'firebase_email', 'user_roles', 'user_rol_activo', 'user_nombre', 'carrito', 'totalAmount', 'paymentIntentId', 'paymentDate', 'paymentMethod'];
+                keysToRemove.forEach(key => {
+                    localStorage.removeItem(key);
+                    sessionStorage.removeItem(key);
+                });
+                Object.keys(localStorage).forEach(key => {
+                    if (key.startsWith('stripe_') || key.startsWith('STRIPE_')) {
+                        localStorage.removeItem(key);
+                    }
+                });
+                Object.keys(sessionStorage).forEach(key => {
+                    if (key.startsWith('stripe_') || key.startsWith('STRIPE_')) {
+                        sessionStorage.removeItem(key);
+                    }
+                });
+                
+                // Usar Firebase si está disponible
+                if (window.initializeFirebaseInstant) {
+                    window.initializeFirebaseInstant().then(({ auth }) => {
+                        auth.signOut().then(() => {
+                            console.log('✅ Sesión cerrada correctamente');
+                            window.location.href = '/auth/login';
+                        }).catch((error) => {
+                            console.error('❌ Error al cerrar sesión:', error);
+                            window.location.href = '/auth/login';
+                        });
+                    }).catch(() => {
                         window.location.href = '/auth/login';
                     });
-                }).catch(() => {
+                } else {
                     window.location.href = '/auth/login';
-                });
-            } else {
-                window.location.href = '/auth/login';
+                }
             }
         }
     }

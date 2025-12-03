@@ -194,6 +194,8 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
+    <!-- Protección contra acceso después de logout -->
+    <script src="{{ url_for('static', filename='js/auth-protection.js') }}"></script>
     
     <script>
         let auth = null;

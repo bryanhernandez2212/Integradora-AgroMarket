@@ -679,7 +679,7 @@
         let citySelector = null;
         
         function initCitySelector() {
-            const ubicacionInput = document.getElementById('ubicacion');
+                const ubicacionInput = document.getElementById('ubicacion');
             if (ubicacionInput && typeof window.initCitySelector !== 'undefined') {
                 citySelector = new window.CitySelector('ubicacion', {
                     formattedId: 'ubicacion_formatted'
@@ -693,7 +693,7 @@
                         formattedInput.value = city;
                     }
                     console.log('Ciudad seleccionada:', city);
-                });
+                    });
             }
         }
 

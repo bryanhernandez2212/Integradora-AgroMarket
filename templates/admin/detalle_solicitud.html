@@ -263,6 +263,8 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-functions.js"></script>
     <script src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
     <script src="{{ url_for('static', filename='js/firebase-instant.js') }}"></script>
+    <!-- Protección contra acceso después de logout -->
+    <script src="{{ url_for('static', filename='js/auth-protection.js') }}"></script>
     <script src="{{ url_for('static', filename='js/email-helper.js') }}"></script>
     <script>
         // Pasar el ID de la solicitud al script antes de cargarlo

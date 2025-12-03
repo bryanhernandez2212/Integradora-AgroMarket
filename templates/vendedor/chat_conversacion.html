@@ -16,6 +16,8 @@
 
     <!-- Firebase Config -->
     <script src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
+    <!-- Protección contra acceso después de logout -->
+    <script src="{{ url_for('static', filename='js/auth-protection.js') }}"></script>
 </head>
 <body
     data-user-id="{{ usuario_id or '' }}"
