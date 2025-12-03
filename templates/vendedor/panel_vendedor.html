@@ -127,59 +127,44 @@
     <section class="stripe-connect-card" id="stripe-connect-card">
         <div class="stripe-card-header">
             <div>
-                <h2>Configuración de cobros</h2>
+                <h2>Guía para empezar a utilizar AgroMarket</h2>
                 <p class="stripe-card-description">
-                    Conecta tu cuenta de Stripe para recibir pagos y transferencias. Debes completar este paso para publicar tus productos.
+                    Para empezar a vender en AgroMarket, debes seguir los siguientes pasos:
                 </p>
             </div>
-            <span class="stripe-status-pill" id="stripe-status-pill">Pendiente</span>
         </div>
 
         <div class="stripe-status-grid" id="stripe-status-grid">
             <div class="stripe-status-item pending" data-status="charges">
                 <div class="icon">
-                    <i class="fas fa-credit-card"></i>
+                    <img src="/static/images/calendario.png" alt="icono" />
                 </div>
                 <div class="details">
-                    <h3>Cobros habilitados</h3>
-                    <p>Permite recibir pagos con tarjeta en tu tienda.</p>
+                    <h3>Días Hábiles</h3>
+                    <p>Debes tener en cuenta que por cada pedido tendrás 2 días hábiles para poder enviar tu producto</p>
                 </div>
             </div>
             <div class="stripe-status-item pending" data-status="payouts">
                 <div class="icon">
-                    <i class="fas fa-money-bill-wave"></i>
+                    <img src="/static/images/transferencia.png" alt="icono" />
                 </div>
                 <div class="details">
                     <h3>Transferencias</h3>
-                    <p>Activa los depósitos automáticos a tu cuenta bancaria.</p>
+                    <p>Todos los pagos serán por tarjeta de crédito/débito</p>
                 </div>
             </div>
             <div class="stripe-status-item pending" data-status="details">
                 <div class="icon">
-                    <i class="fas fa-user-check"></i>
+                    <img src="/static/images/chats.png" alt="icono" />
                 </div>
                 <div class="details">
-                    <h3>Verificación de datos</h3>
-                    <p>Completa la información fiscal y de identidad requerida.</p>
+                    <h3>Chatea con tus clientes</h3>
+                    <p>Utiliza la plataforma para comunicarte directamente con tus compradores</p>
                 </div>
             </div>
         </div>
-
-        <div class="stripe-callouts" id="stripe-callouts"></div>
-
-        <div class="stripe-card-actions">
-            <button class="btn-stripe-primary" id="stripe-onboarding-btn">
-                <i class="fas fa-play-circle"></i>
-                Completar configuración de cobros
-            </button>
-            <button class="btn-stripe-secondary" id="stripe-refresh-btn" type="button">
-                <i class="fas fa-rotate"></i>
-                Actualizar estado
-            </button>
-        </div>
-
-        <p class="stripe-last-update" id="stripe-last-update" aria-live="polite"></p>
     </section>
+
 </main>
 
 <script>
@@ -219,7 +204,7 @@
   }
 </script>
 
-<script src="{{ url_for('static', filename='js/stripe-connect.js') }}"></script>
+<!--<script src="{{ url_for('static', filename='js/stripe-connect.js') }}"></script>
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-app-compat.js"></script>
