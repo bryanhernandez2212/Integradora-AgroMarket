@@ -893,7 +893,7 @@ form button[type="submit"]:hover {
 
 /* ===== Stripe Connect Card ===== */
 .stripe-connect-card {
-    max-width: 1040px;
+    max-width: 1300px;
     margin: 2rem auto;
     padding: 2rem;
     border-radius: 16px;
@@ -911,7 +911,7 @@ form button[type="submit"]:hover {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 1.5rem;
+    gap: 2.5rem;
     margin-bottom: 1.5rem;
 }
 
@@ -957,12 +957,12 @@ form button[type="submit"]:hover {
 .stripe-status-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 1rem;
+    gap: 2rem;
 }
 
 .stripe-status-item {
     display: flex;
-    gap: 1rem;
+    gap: 2rem;
     padding: 1rem;
     border-radius: 12px;
     border: 1px solid #e6ece7;
@@ -971,8 +971,8 @@ form button[type="submit"]:hover {
 }
 
 .stripe-status-item .icon {
-    width: 44px;
-    height: 44px;
+    width: 54px;
+    height: 54px;
     border-radius: 12px;
     display: flex;
     align-items: center;
@@ -1147,4 +1147,85 @@ form button[type="submit"]:hover {
         justify-content: center;
         width: 100%;
     }
+}
+
+/* Fade + Slide suave al cargar */
+@keyframes fadeSlideUp {
+    0% {
+        opacity: 0;
+        transform: translateY(15px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Enter animation para cada ítem (con pequeño delay) */
+.stripe-status-item {
+    opacity: 0;
+    animation: fadeSlideUp 0.6s ease forwards;
+}
+.stripe-status-item:nth-child(1) {
+    animation-delay: 0.1s;
+}
+.stripe-status-item:nth-child(2) {
+    animation-delay: 0.25s;
+}
+.stripe-status-item:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+/* Hover elegante en ítems */
+.stripe-status-item:hover {
+    transform: translateY(-4px);
+    background: #ffffff;
+    border-color: #b7d8b8;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
+}
+
+/* Bounce suave para iconos */
+@keyframes softBounce {
+    0% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+    100% { transform: translateY(0); }
+}
+.stripe-status-item:hover .icon {
+    animation: softBounce 0.5s ease;
+}
+
+/* Efecto shimmer en pending */
+@keyframes shimmer {
+    0% { background-position: -200px 0; }
+    100% { background-position: 200px 0; }
+}
+
+.stripe-status-item.pending {
+    background: linear-gradient(
+        90deg, #f9fbf9 0%, #eef3ee 50%, #f9fbf9 100%
+    );
+    background-size: 200px 100%;
+    animation: shimmer 2s infinite linear;
+}
+
+/* Fade-in para la tarjeta principal */
+.stripe-connect-card {
+    animation: fadeSlideUp 0.7s ease;
+}
+
+/* Efecto hover más elegante */
+.stripe-connect-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+}
+
+/* Animación en el header */
+.stripe-card-header h2 {
+    animation: fadeSlideUp 0.8s ease;
+}
+
+.stripe-status-item .icon img {
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
 }
