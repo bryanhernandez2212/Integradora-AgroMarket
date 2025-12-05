@@ -4,8 +4,9 @@ services:
     build: .
     container_name: agromarket_app
     ports:
-      - "3000:3000"
+      - "5001:5001"
     volumes:
       - .:/app
     environment:
       - FLASK_ENV=development
+      - PORT=5001
