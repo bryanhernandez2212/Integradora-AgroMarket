@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Flask
+instance/
+.webassets-cache
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Node modules (si hay)
+node_modules/
+npm-debug.log
+
+# Logs
+*.log
+firebase-debug.log
+
+# Archivos de configuración sensibles
+.env
+.env.local
+*.pem
+*.key
+serviceAccountKey.json
+
+# Archivos temporales
+*.tmp
+*.temp
+cookies.txt
+
+# Archivos de build
+dist/
+build/
+*.egg-info/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Firebase
+.firebase/
+firebase-debug.log
+
+# Archivos APK
+*.apk
+
+# Archivos de uploads (opcional, dependiendo si quieres incluirlos)
+# static/uploads/
+
