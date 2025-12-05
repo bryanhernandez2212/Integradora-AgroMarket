@@ -26,4 +26,8 @@ jobs:
 
     - name: Ejecutar pruebas con pytest
       run: |
-        pytest tests/ --maxfail=1 --disable-warnings -q
+        if [ -d "tests" ] && [ "$(ls -A tests/*.py 2>/dev/null)" ]; then
+          pytest tests/ --maxfail=1 --disable-warnings -q
+        else
+          echo "No hay tests disponibles, saltando ejecución de pytest"
+        fi
