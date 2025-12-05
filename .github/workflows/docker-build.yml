@@ -17,7 +17,19 @@ jobs:
     - name: Configurar Docker Buildx
       uses: docker/setup-buildx-action@v2
     
+    - name: Verificar secretos de Docker Hub
+      id: check-secrets
+      run: |
+        if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+          echo "secrets_configured=false" >> $GITHUB_OUTPUT
+          echo "⚠️ Advertencia: DOCKERHUB_USERNAME no está configurado"
+        else
+          echo "secrets_configured=true" >> $GITHUB_OUTPUT
+          echo "✅ Secretos de Docker Hub configurados"
+        fi
+    
     - name: Login en Docker Hub
+      if: steps.check-secrets.outputs.secrets_configured == 'true' && github.event_name != 'pull_request'
       uses: docker/login-action@v2
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -25,6 +37,7 @@ jobs:
     
     - name: Extraer metadata (tags, labels) para Docker
       id: meta
+      if: steps.check-secrets.outputs.secrets_configured == 'true'
       uses: docker/metadata-action@v4
       with:
         images: ${{ secrets.DOCKERHUB_USERNAME }}/agromarket
@@ -34,7 +47,8 @@ jobs:
           type=sha,format=short,prefix=sha-
           type=raw,value=latest,enable={{is_default_branch}}
     
-    - name: Construir y publicar imagen Docker
+    - name: Construir imagen Docker (con secretos)
+      if: steps.check-secrets.outputs.secrets_configured == 'true'
       uses: docker/build-push-action@v4
       with:
         context: .
@@ -43,4 +57,25 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+    
+    - name: Construir imagen Docker (sin secretos - solo validación)
+      if: steps.check-secrets.outputs.secrets_configured != 'true'
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: false
+        tags: agromarket:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Mostrar instrucciones para configurar secretos
+      if: steps.check-secrets.outputs.secrets_configured != 'true'
+      run: |
+        echo "::warning::Los secretos de Docker Hub no están configurados"
+        echo "Para publicar imágenes en Docker Hub, configura los siguientes secretos:"
+        echo "1. Ve a: Settings → Secrets and variables → Actions"
+        echo "2. Añade: DOCKERHUB_USERNAME (tu usuario de Docker Hub)"
+        echo "3. Añade: DOCKERHUB_TOKEN (token de acceso de Docker Hub)"
+        echo ""
+        echo "La imagen se construyó correctamente pero no se publicó."
 
