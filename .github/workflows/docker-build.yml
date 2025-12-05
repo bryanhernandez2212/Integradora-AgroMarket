@@ -17,65 +17,56 @@ jobs:
     - name: Configurar Docker Buildx
       uses: docker/setup-buildx-action@v2
     
-    - name: Verificar secretos de Docker Hub
-      id: check-secrets
-      run: |
-        if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
-          echo "secrets_configured=false" >> $GITHUB_OUTPUT
-          echo "⚠️ Advertencia: DOCKERHUB_USERNAME no está configurado"
-        else
-          echo "secrets_configured=true" >> $GITHUB_OUTPUT
-          echo "✅ Secretos de Docker Hub configurados"
-        fi
-    
     - name: Login en Docker Hub
-      if: steps.check-secrets.outputs.secrets_configured == 'true' && github.event_name != 'pull_request'
+      if: github.event_name != 'pull_request'
       uses: docker/login-action@v2
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+      continue-on-error: true
+    
+    - name: Determinar si se deben publicar imágenes
+      id: should-push
+      run: |
+        if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
+          echo "push=true" >> $GITHUB_OUTPUT
+          echo "username=${{ secrets.DOCKERHUB_USERNAME }}" >> $GITHUB_OUTPUT
+        else
+          echo "push=false" >> $GITHUB_OUTPUT
+          echo "username=agromarket" >> $GITHUB_OUTPUT
+        fi
     
     - name: Extraer metadata (tags, labels) para Docker
       id: meta
-      if: steps.check-secrets.outputs.secrets_configured == 'true'
+      if: steps.should-push.outputs.push == 'true'
       uses: docker/metadata-action@v4
       with:
-        images: ${{ secrets.DOCKERHUB_USERNAME }}/agromarket
+        images: ${{ steps.should-push.outputs.username }}/agromarket
         tags: |
           type=ref,event=branch
-          type=ref,event=pr
           type=sha,format=short,prefix=sha-
           type=raw,value=latest,enable={{is_default_branch}}
     
-    - name: Construir imagen Docker (con secretos)
-      if: steps.check-secrets.outputs.secrets_configured == 'true'
+    - name: Construir y publicar imagen Docker
       uses: docker/build-push-action@v4
       with:
         context: .
-        push: ${{ github.event_name != 'pull_request' }}
-        tags: ${{ steps.meta.outputs.tags }}
+        push: ${{ steps.should-push.outputs.push == 'true' }}
+        tags: ${{ steps.meta.outputs.tags || 'agromarket:test' }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
     
-    - name: Construir imagen Docker (sin secretos - solo validación)
-      if: steps.check-secrets.outputs.secrets_configured != 'true'
-      uses: docker/build-push-action@v4
-      with:
-        context: .
-        push: false
-        tags: agromarket:test
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-    
-    - name: Mostrar instrucciones para configurar secretos
-      if: steps.check-secrets.outputs.secrets_configured != 'true'
+    - name: Mostrar resultado
+      if: steps.should-push.outputs.push != 'true'
       run: |
-        echo "::warning::Los secretos de Docker Hub no están configurados"
-        echo "Para publicar imágenes en Docker Hub, configura los siguientes secretos:"
-        echo "1. Ve a: Settings → Secrets and variables → Actions"
-        echo "2. Añade: DOCKERHUB_USERNAME (tu usuario de Docker Hub)"
-        echo "3. Añade: DOCKERHUB_TOKEN (token de acceso de Docker Hub)"
-        echo ""
-        echo "La imagen se construyó correctamente pero no se publicó."
-
+        echo "::notice::La imagen Docker se construyó correctamente"
+        echo "::warning::No se publicó en Docker Hub porque:"
+        if [ "${{ github.event_name }}" == "pull_request" ]; then
+          echo "  - Este es un Pull Request (solo se construye, no se publica)"
+        fi
+        if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+          echo "  - Los secretos de Docker Hub no están configurados"
+          echo "  - Configura DOCKERHUB_USERNAME y DOCKERHUB_TOKEN en:"
+          echo "    Settings → Secrets and variables → Actions"
+        fi
